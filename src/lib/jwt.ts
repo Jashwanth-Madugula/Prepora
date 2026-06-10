@@ -1,7 +1,15 @@
 import jwt from "jsonwebtoken";
 
-const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || process.env.ACCESS_TOKEN_SECRET || "access-secret-key-change-me";
-const REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || process.env.REFRESH_TOKEN_SECRET || "refresh-secret-key-change-me";
+if (!process.env.JWT_ACCESS_SECRET) {
+  throw new Error("JWT_ACCESS_SECRET environment variable is missing.");
+}
+
+if (!process.env.JWT_REFRESH_SECRET) {
+  throw new Error("JWT_REFRESH_SECRET environment variable is missing.");
+}
+
+const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET;
+const REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET;
 
 export function signAccessToken(payload: object): string {
   return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: "15m" });

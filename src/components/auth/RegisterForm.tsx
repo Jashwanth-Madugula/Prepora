@@ -31,10 +31,16 @@ export default function RegisterForm() {
         body: JSON.stringify(data),
       });
 
-      const resData = await response.json();
+      let resData;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        resData = await response.json();
+      } else {
+        throw new Error("Unable to connect to the server. Please try again later.");
+      }
 
       if (!response.ok) {
-        throw new Error(resData.message || "Registration failed");
+        throw new Error(resData?.message || "Registration failed");
       }
 
       setSuccess("Account created successfully! Please check your email to verify your account.");

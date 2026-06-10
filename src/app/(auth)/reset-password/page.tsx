@@ -39,10 +39,16 @@ function ResetPasswordContent() {
         body: JSON.stringify({ token, password: data.password }),
       });
 
-      const resData = await response.json();
+      let resData;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        resData = await response.json();
+      } else {
+        throw new Error("Unable to connect to the server. Please try again later.");
+      }
 
       if (!response.ok) {
-        throw new Error(resData.message || "Failed to reset password");
+        throw new Error(resData?.message || "Failed to reset password");
       }
 
       setSuccess("Your password has been successfully reset!");

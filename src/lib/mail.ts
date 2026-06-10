@@ -8,6 +8,14 @@ const EMAILJS_PRIVATE_KEY = process.env.EMAILJS_PRIVATE_KEY || "";
 const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASS || "";
 
+// Fail fast: make sure at least one email delivery method is configured
+const isEmailJSConfigured = !!(EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY && EMAILJS_PRIVATE_KEY);
+const isSmtpConfigured = !!(SMTP_USER && SMTP_PASS);
+
+if (!isEmailJSConfigured && !isSmtpConfigured) {
+  throw new Error("Prepora mail setup failed: Neither EmailJS nor SMTP credentials are fully configured.");
+}
+
 // Dynamically determine host and port based on SMTP user configuration
 const isGmail = SMTP_USER.includes("gmail.com");
 const SMTP_HOST = process.env.SMTP_HOST || (isGmail ? "smtp.gmail.com" : "smtp.mailtrap.io");

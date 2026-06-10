@@ -84,28 +84,6 @@ export const forgotPasswordSchema =
     }
   );
 
-export const profileSchema = z.object({
-  fullName: z
-    .string()
-    .min(3, "Name must be at least 3 characters")
-    .max(50),
-
-  username: z
-    .string()
-    .min(3, "Username must be at least 3 characters")
-    .max(20)
-    .regex(
-      /^[a-z0-9_]+$/,
-      "Username can only contain lowercase letters, numbers and underscores"
-    ),
-
-  bio: z.string().max(250).optional().or(z.literal("")),
-  college: z.string().optional().or(z.literal("")),
-  branch: z.string().optional().or(z.literal("")),
-  graduationYear: z.union([z.number(), z.string(), z.null()]).optional(),
-  avatar: z.string().optional().or(z.literal("")),
-});
-
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
   newPassword: z
@@ -136,9 +114,6 @@ export type ForgotPasswordInput =
 
 export type ResetPasswordInput =
   z.infer<typeof resetPasswordSchema>;
-
-export type ProfileInput =
-  z.infer<typeof profileSchema>;
 
 export type ChangePasswordInput =
   z.infer<typeof changePasswordSchema>;

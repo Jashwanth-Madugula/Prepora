@@ -6,6 +6,7 @@ import { comparePassword } from "@/lib/bcrypt";
 import { signAccessToken, signRefreshToken } from "@/lib/jwt";
 import { cookies } from "next/headers";
 import { checkRateLimit, getIpAddress } from "@/lib/rateLimit";
+import { hashToken } from "@/lib/token-hash";
 
 export async function POST(req: NextRequest) {
   try {
@@ -104,12 +105,12 @@ export async function POST(req: NextRequest) {
     const refreshTokenExpiryString = rememberMe ? "30d" : "7d";
     const refreshTokenMaxAge = rememberMe ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60;
 
-    // Sign tokens (containing userId, email, role)
+    // Sign tokens (containing userId, email, role, and rememberMe flag)
     const accessToken = signAccessToken({ userId: user._id, email: user.email, role: user.role });
-    const refreshToken = signRefreshToken({ userId: user._id, email: user.email, role: user.role }, rememberMe);
+    const refreshToken = signRefreshToken({ userId: user._id, email: user.email, role: user.role, rememberMe }, rememberMe);
 
-    // Save refresh token to user document
-    user.refreshToken = refreshToken;
+    // Save hashed refresh token to user document
+    user.refreshToken = await hashToken(refreshToken);
     await user.save();
 
     // Set cookies

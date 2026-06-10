@@ -3,14 +3,11 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { 
-  profileSchema, 
-  ProfileInput, 
-  changePasswordSchema, 
-  ChangePasswordInput 
-} from "@/lib/validations/auth";
+import { profileSchema, ProfileInput } from "@/lib/validations/profile";
+import { changePasswordSchema, ChangePasswordInput } from "@/lib/validations/auth";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -30,13 +27,23 @@ export default function ProfilePage() {
   const [deletePasswordConfirm, setDeletePasswordConfirm] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Skills & Companies state tags
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState("");
+  const [targetCompanies, setTargetCompanies] = useState<string[]>([]);
+  const [companyInput, setCompanyInput] = useState("");
+
   const {
     register: registerProfile,
     handleSubmit: handleProfileSubmit,
     formState: { errors: profileErrors },
     setValue: setProfileValue,
   } = useForm<ProfileInput>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(profileSchema) as any,
+    defaultValues: {
+      skills: [],
+      targetCompanies: [],
+    },
   });
 
   const {
@@ -52,25 +59,44 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch("/api/user/profile");
+        const res = await fetch("/api/profile");
         if (!res.ok) {
           if (res.status === 401) {
             router.push("/login");
             return;
           }
+          if (res.status === 404) {
+            // No profile yet, redirect to complete it
+            router.push("/complete-profile");
+            return;
+          }
           throw new Error("Failed to fetch profile");
         }
         const data = await res.json();
-        const user = data.user;
+        const profile = data.profile;
         
         // Populate form values
-        setProfileValue("fullName", user.fullName || "");
-        setProfileValue("username", user.username || "");
-        setProfileValue("bio", user.bio || "");
-        setProfileValue("college", user.college || "");
-        setProfileValue("branch", user.branch || "");
-        setProfileValue("graduationYear", user.graduationYear ?? "");
-        setProfileValue("avatar", user.avatar || "");
+        setProfileValue("fullName", profile.fullName || "");
+        setProfileValue("username", profile.username || "");
+        setProfileValue("headline", profile.headline || "");
+        setProfileValue("bio", profile.bio || "");
+        setProfileValue("college", profile.college || "");
+        setProfileValue("degree", profile.degree || "");
+        setProfileValue("branch", profile.branch || "");
+        setProfileValue("cgpa", profile.cgpa ?? "");
+        setProfileValue("graduationYear", profile.graduationYear ?? "");
+        setProfileValue("targetRole", profile.targetRole || "");
+        setProfileValue("linkedinUrl", profile.linkedinUrl || "");
+        setProfileValue("githubUrl", profile.githubUrl || "");
+        setProfileValue("portfolioUrl", profile.portfolioUrl || "");
+        setProfileValue("phone", profile.phone || "");
+        setProfileValue("location", profile.location || "");
+        setProfileValue("experienceLevel", profile.experienceLevel || "student");
+        setProfileValue("profilePicture", profile.profilePicture || "");
+
+        // Set state tags
+        setSkills(profile.skills || []);
+        setTargetCompanies(profile.targetCompanies || []);
       } catch (err) {
         console.error(err);
         setProfileError("Could not load profile. Please refresh.");
@@ -87,10 +113,14 @@ export default function ProfilePage() {
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const res = await fetch("/api/user/profile", {
-        method: "PUT",
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          skills,
+          targetCompanies,
+        }),
       });
 
       const resData = await res.json();
@@ -177,6 +207,37 @@ export default function ProfilePage() {
     }
   };
 
+  // Tag Add/Remove Handlers
+  const handleSkillKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      const val = skillInput.trim().replace(/,$/, "");
+      if (val && !skills.includes(val)) {
+        setSkills([...skills, val]);
+      }
+      setSkillInput("");
+    }
+  };
+
+  const removeSkill = (indexToRemove: number) => {
+    setSkills(skills.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleCompanyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      const val = companyInput.trim().replace(/,$/, "");
+      if (val && !targetCompanies.includes(val)) {
+        setTargetCompanies([...targetCompanies, val]);
+      }
+      setCompanyInput("");
+    }
+  };
+
+  const removeCompany = (indexToRemove: number) => {
+    setTargetCompanies(targetCompanies.filter((_, idx) => idx !== indexToRemove));
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 items-center justify-center">
@@ -201,6 +262,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             <Link
               href="/dashboard"
               className="text-sm font-semibold hover:text-zinc-500 transition duration-200"
@@ -209,7 +271,7 @@ export default function ProfilePage() {
             </Link>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition duration-200"
+              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition duration-200 cursor-pointer"
             >
               Sign Out
             </button>
@@ -218,11 +280,11 @@ export default function ProfilePage() {
       </header>
 
       {/* Main Body */}
-      <main className="max-w-4xl mx-auto px-6 py-12 flex-1 w-full">
+      <main className="max-w-5xl mx-auto px-6 py-12 flex-1 w-full">
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight mb-2">Account Settings</h1>
           <p className="text-zinc-500 dark:text-zinc-400">
-            Manage your public profile, account settings, and preferences.
+            Manage your profile, academic credentials, and preferences.
           </p>
         </div>
 
@@ -267,7 +329,7 @@ export default function ProfilePage() {
             {/* EDIT PROFILE TAB */}
             {activeTab === "edit" && (
               <div>
-                <h3 className="text-lg font-bold mb-4">Profile Information</h3>
+                <h3 className="text-lg font-bold mb-6">Profile Information</h3>
                 
                 {profileError && (
                   <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm">
@@ -280,68 +342,141 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-6">
+                  
+                  {/* Account Basics */}
+                  <div className="border-b border-zinc-100 dark:border-zinc-800 pb-6 space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Basic Info</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Full Name
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("fullName")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                        {profileErrors.fullName && (
+                          <p className="text-xs text-red-500 mt-1">{profileErrors.fullName.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Username
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("username")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                        {profileErrors.username && (
+                          <p className="text-xs text-red-500 mt-1">{profileErrors.username.message}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Professional profile */}
+                  <div className="border-b border-zinc-100 dark:border-zinc-800 pb-6 space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Professional details</h4>
                     <div>
                       <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
-                        Full Name
+                        Headline
                       </label>
                       <input
                         type="text"
-                        {...registerProfile("fullName")}
-                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        {...registerProfile("headline")}
+                        placeholder="e.g. Aspiring Software Engineer"
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
                       />
-                      {profileErrors.fullName && (
-                        <p className="text-xs text-red-500 mt-1">{profileErrors.fullName.message}</p>
+                      {profileErrors.headline && (
+                        <p className="text-xs text-red-500 mt-1">{profileErrors.headline.message}</p>
                       )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Experience Level
+                        </label>
+                        <select
+                          {...registerProfile("experienceLevel")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        >
+                          <option value="student">Student</option>
+                          <option value="fresher">Fresher</option>
+                          <option value="experienced">Experienced</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Target Role
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("targetRole")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Phone Number
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("phone")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Location
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("location")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
-                        Username
+                        Profile Image URL
                       </label>
                       <input
                         type="text"
-                        {...registerProfile("username")}
-                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        placeholder="https://example.com/avatar.jpg"
+                        {...registerProfile("profilePicture")}
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
                       />
-                      {profileErrors.username && (
-                        <p className="text-xs text-red-500 mt-1">{profileErrors.username.message}</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                        Bio
+                      </label>
+                      <textarea
+                        rows={3}
+                        {...registerProfile("bio")}
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                      />
+                      {profileErrors.bio && (
+                        <p className="text-xs text-red-500 mt-1">{profileErrors.bio.message}</p>
                       )}
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
-                      Avatar Image URL
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="https://example.com/avatar.jpg"
-                      {...registerProfile("avatar")}
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
-                    />
-                    {profileErrors.avatar && (
-                      <p className="text-xs text-red-500 mt-1">{profileErrors.avatar.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
-                      Bio
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="Write a short bio about yourself..."
-                      {...registerProfile("bio")}
-                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
-                    />
-                    {profileErrors.bio && (
-                      <p className="text-xs text-red-500 mt-1">{profileErrors.bio.message}</p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Academic Profile */}
+                  <div className="border-b border-zinc-100 dark:border-zinc-800 pb-6 space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Academic Background</h4>
                     <div>
                       <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
                         College / University
@@ -349,48 +484,190 @@ export default function ProfilePage() {
                       <input
                         type="text"
                         {...registerProfile("college")}
-                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
                       />
-                      {profileErrors.college && (
-                        <p className="text-xs text-red-500 mt-1">{profileErrors.college.message}</p>
-                      )}
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Degree
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("degree")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Branch / Major
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("branch")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          CGPA
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("cgpa")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                        {profileErrors.cgpa && (
+                          <p className="text-xs text-red-500 mt-1">{profileErrors.cgpa.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Graduation Year
+                        </label>
+                        <input
+                          type="number"
+                          {...registerProfile("graduationYear")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                        {profileErrors.graduationYear && (
+                          <p className="text-xs text-red-500 mt-1">{profileErrors.graduationYear.message}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Skills & Preferences */}
+                  <div className="border-b border-zinc-100 dark:border-zinc-800 pb-6 space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Skills & Preferences</h4>
+                    
+                    {/* Skills */}
                     <div>
                       <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
-                        Branch / Major
+                        Skills (type and press Enter or comma)
                       </label>
                       <input
                         type="text"
-                        placeholder="Computer Science"
-                        {...registerProfile("branch")}
-                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        value={skillInput}
+                        onChange={(e) => setSkillInput(e.target.value)}
+                        onKeyDown={handleSkillKeyDown}
+                        placeholder="e.g. React, Python"
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
                       />
-                      {profileErrors.branch && (
-                        <p className="text-xs text-red-500 mt-1">{profileErrors.branch.message}</p>
+                      {skills.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-3 p-3 bg-zinc-50 dark:bg-zinc-950/50 rounded-xl border border-zinc-200 dark:border-zinc-800/80">
+                          {skills.map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium border border-zinc-200 dark:border-zinc-750"
+                            >
+                              {skill}
+                              <button
+                                type="button"
+                                onClick={() => removeSkill(idx)}
+                                className="hover:text-red-400 font-bold ml-0.5 focus:outline-none text-zinc-400"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
 
+                    {/* Companies */}
                     <div>
                       <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
-                        Graduation Year
+                        Target Companies (type and press Enter or comma)
                       </label>
                       <input
-                        type="number"
-                        placeholder="2026"
-                        {...registerProfile("graduationYear")}
-                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        type="text"
+                        value={companyInput}
+                        onChange={(e) => setCompanyInput(e.target.value)}
+                        onKeyDown={handleCompanyKeyDown}
+                        placeholder="e.g. Stripe, Google"
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
                       />
-                      {profileErrors.graduationYear && (
-                        <p className="text-xs text-red-500 mt-1">{profileErrors.graduationYear.message}</p>
+                      {targetCompanies.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-3 p-3 bg-zinc-50 dark:bg-zinc-950/50 rounded-xl border border-zinc-200 dark:border-zinc-800/80">
+                          {targetCompanies.map((company, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-medium border border-zinc-200 dark:border-zinc-750"
+                            >
+                              {company}
+                              <button
+                                type="button"
+                                onClick={() => removeCompany(idx)}
+                                className="hover:text-red-400 font-bold ml-0.5 focus:outline-none text-zinc-400"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Social Profiles */}
+                  <div className="border-b border-zinc-100 dark:border-zinc-800 pb-6 space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Social Connections</h4>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          LinkedIn URL
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("linkedinUrl")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                        {profileErrors.linkedinUrl && (
+                          <p className="text-xs text-red-500 mt-1">{profileErrors.linkedinUrl.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          GitHub URL
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("githubUrl")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                        {profileErrors.githubUrl && (
+                          <p className="text-xs text-red-500 mt-1">{profileErrors.githubUrl.message}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                          Portfolio URL
+                        </label>
+                        <input
+                          type="text"
+                          {...registerProfile("portfolioUrl")}
+                          className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm"
+                        />
+                        {profileErrors.portfolioUrl && (
+                          <p className="text-xs text-red-500 mt-1">{profileErrors.portfolioUrl.message}</p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   <button
                     type="submit"
                     disabled={isSavingProfile}
-                    className="px-6 py-2.5 rounded-xl bg-black hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-black font-semibold text-sm transition duration-200 flex items-center gap-2 disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-xl bg-black hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-black font-semibold text-sm transition duration-200 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     {isSavingProfile ? "Saving Profile..." : "Save Changes"}
                   </button>
@@ -463,7 +740,7 @@ export default function ProfilePage() {
                   <button
                     type="submit"
                     disabled={isChangingPassword}
-                    className="px-6 py-2.5 rounded-xl bg-black hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-black font-semibold text-sm transition duration-200 flex items-center gap-2 disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-xl bg-black hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-black font-semibold text-sm transition duration-200 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     {isChangingPassword ? "Updating Password..." : "Change Password"}
                   </button>
@@ -488,7 +765,7 @@ export default function ProfilePage() {
                 {!showDeleteConfirm ? (
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition duration-200"
+                    className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition duration-200 cursor-pointer"
                   >
                     Delete My Account
                   </button>
@@ -514,7 +791,7 @@ export default function ProfilePage() {
                       <button
                         type="submit"
                         disabled={isDeletingAccount}
-                        className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition duration-200 disabled:opacity-50"
+                        className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition duration-200 disabled:opacity-50 cursor-pointer"
                       >
                         {isDeletingAccount ? "Deleting Account..." : "Yes, Delete Permanently"}
                       </button>
@@ -525,7 +802,7 @@ export default function ProfilePage() {
                           setDeletePasswordConfirm("");
                           setDeleteError(null);
                         }}
-                        className="px-6 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 font-semibold text-sm transition duration-200"
+                        className="px-6 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 font-semibold text-sm transition duration-200 cursor-pointer"
                       >
                         Cancel
                       </button>

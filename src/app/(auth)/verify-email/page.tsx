@@ -26,10 +26,16 @@ function VerifyEmailContent() {
           body: JSON.stringify({ token }),
         });
 
-        const data = await response.json();
+        let data;
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          throw new Error("Unable to connect to the server. Please try again later.");
+        }
 
         if (!response.ok) {
-          throw new Error(data.message || "Verification failed");
+          throw new Error(data?.message || "Verification failed");
         }
 
         setStatus("success");

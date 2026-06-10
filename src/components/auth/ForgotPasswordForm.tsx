@@ -31,10 +31,16 @@ export default function ForgotPasswordForm() {
         body: JSON.stringify(data),
       });
 
-      const resData = await response.json();
+      let resData;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        resData = await response.json();
+      } else {
+        throw new Error("Unable to connect to the server. Please try again later.");
+      }
 
       if (!response.ok) {
-        throw new Error(resData.message || "Failed to send reset link");
+        throw new Error(resData?.message || "Failed to send reset link");
       }
 
       setSuccess("If that email address exists in our system, we have sent a reset password link to it.");

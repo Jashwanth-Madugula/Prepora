@@ -8,12 +8,6 @@ export interface IUser extends Document {
 
   role: "USER" | "ADMIN" | "SUPER_ADMIN";
 
-  avatar?: string;
-  bio?: string;
-  college?: string;
-  branch?: string;
-  graduationYear?: number;
-
   isVerified: boolean;
   isDeleted: boolean;
 
@@ -62,31 +56,6 @@ const UserSchema = new mongoose.Schema<IUser>(
       type: String,
       enum: ["USER", "ADMIN", "SUPER_ADMIN"],
       default: "USER",
-    },
-
-    avatar: {
-      type: String,
-      default: "",
-    },
-
-    bio: {
-      type: String,
-      default: "",
-    },
-
-    college: {
-      type: String,
-      default: "",
-    },
-
-    branch: {
-      type: String,
-      default: "",
-    },
-
-    graduationYear: {
-      type: Number,
-      default: null,
     },
 
     isVerified: {
