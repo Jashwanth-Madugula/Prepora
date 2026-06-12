@@ -1,0 +1,86 @@
+================================================================================
+PREPORA: PROFILE MANAGEMENT SYSTEM DOCUMENTATION
+================================================================================
+
+This document details the architecture, schemas, validation logic, and file-by-file
+operations of Prepora's Placement Profile Management module.
+
+--------------------------------------------------------------------------------
+1. PROFILE SYSTEM ARCHITECTURE & FLOW
+--------------------------------------------------------------------------------
+The Profile module allows candidates to manage their academic data, target careers,
+skills list, and social URLs. This profile acts as the core database record for
+aggregating resume insights, computing ATS matching scores, and driving personal
+mock interviews.
+
+Flow:
+- Complete Profile: Upon first sign-in, middleware redirects the candidate to
+  `/complete-profile` if no profile exists for their account.
+- Merged Document Retrieval: When the client calls `GET /api/profile`, the system
+  queries both the `User` document (for email, username, fullName) and the
+  `Profile` document (academic details), merging them before sending them to the UI.
+- Dual-Collection Updates: Modifying profile data via `POST` or `PATCH` updates
+  the `User` collection (for fullName/username) and the `Profile` collection
+  simultaneously, maintaining data synchronization.
+- Validation: Forms are validated both in the browser (Zod/React Hook Form) and
+  on the server-side (`profileSchema` validation via `zod`).
+
+--------------------------------------------------------------------------------
+2. FILE-BY-FILE LOGIC AND USAGE
+--------------------------------------------------------------------------------
+
+A. DATA MODELS (src/models/)
+========================================
+1. [User.ts]
+   - Stored Fields: `fullName`, `username` (lowercased), `email`.
+   - Logic: Holds credential fields updated during profile editing.
+
+2. [Profile.ts]
+   - Purpose: Mongoose Schema & Interface storing placement credentials.
+   - Fields:
+     * `userId`: Reference to `User` document.
+     * `graduationYear`: Academic completion date (year).
+     * `degree`: Field of study (e.g. B.Tech).
+     * `cgpa`: Academic performance score.
+     * `skills`: Array of candidate skill sets.
+     * `targetCompanies`: Companies the candidate is preparing for.
+     * `githubUrl` / `linkedinUrl`: Social validation links.
+   - Logic: Holds the primary candidate credentials used in ATS evaluations.
+
+B. VALIDATIONS & SCHEMAS (src/lib/validations/)
+========================================
+3. [profile.ts]
+   - Purpose: Zod validation schema definition.
+   - Logic: Enforces validation limits:
+     * `fullName` & `username` (string limits and alphanumerics).
+     * `cgpa` (numerical ranges, e.g. 0 to 10).
+     * `graduationYear` (logical boundaries).
+     * URL validation regexes for GitHub and LinkedIn.
+
+C. ENDPOINTS & ROUTES (src/app/api/profile/)
+========================================
+4. [route.ts]
+   - GET: Authenticates user, retrieves both `User` and `Profile` collections,
+     merges credentials (fullName, email, CGPA, target companies), and sends them.
+   - POST: Checks for duplicates, validates parameters via Zod, checks availability of
+     chosen `username`, saves `User`, creates the new `Profile` entry.
+   - PATCH: Performs schema validations, verifies duplicate usernames, updates fields on
+     both collections, and returns the updated entity.
+   - DELETE: Removes the profile matching the logged-in candidate ID.
+
+D. FRONTEND PAGES (src/app/)
+========================================
+5. [complete-profile/page.tsx]
+   - The initial wizard/setup screen. Guides candidates to enter graduation details,
+     CGPA, and skills right after registering.
+
+6. [profile/page.tsx]
+   - The premium profile manager dashboard. Allows candidates to update their details,
+     add skills, configure social handles, and visualize academic summary stats.
+
+================================================================================
+FILE PURPOSE & HELP:
+This text documentation file provides a complete technical map of Prepora's profile
+management backend APIs, Zod validation models, double-collection database writes,
+and dashboard components. It serves as a clear architectural reference.
+================================================================================

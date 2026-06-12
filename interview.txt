@@ -1,0 +1,176 @@
+================================================================================
+PREPORA: AI MOCK INTERVIEW SIMULATOR SYSTEM DOCUMENTATION
+================================================================================
+
+This document details the architecture, design patterns, file-by-file logic, 
+scoring criteria, and end-to-end flow of the Prepora AI Mock Interview System.
+
+--------------------------------------------------------------------------------
+1. ARCHITECTURAL OVERVIEW
+--------------------------------------------------------------------------------
+The Prepora AI Mock Interview System is built as a modular feature inside a 
+Next.js App Router (Next.js 16) framework, backed by a MongoDB database with 
+Mongoose, and powered by Groq SDK utilizing the "llama-3.3-70b-versatile" model.
+
+Key architectural concepts:
+- Question Persistence: Questions are generated via AI and persisted to the 
+  database immediately when an interview session is created (POST /api/interviews).
+  This ensures that the question list remains stable even if a candidate refreshes 
+  their browser, resolving any question rotation bugs.
+- Granular AI Grading (Evaluation Engine): Candidate responses are fed to the 
+  Groq API, which grades the answer out of 100 on 5 distinct dimensions 
+  (Technical Accuracy, Communication, Confidence, Completeness, and Structure) 
+  and drafts strengths, weaknesses, and a suggested exemplary model response.
+- Aggregation & Scoring: When the session ends, the analytics engine aggregates 
+  individual question scores to compile final statistical scorecards.
+
+--------------------------------------------------------------------------------
+2. FILE-BY-FILE LOGIC AND USAGE
+--------------------------------------------------------------------------------
+
+A. DATA MODELS (src/models/)
+========================================
+1. [interview.model.ts]
+   - Purpose: Defines the Mongoose Schema & TypeScript Interface (`IInterview`) 
+     for an interview session.
+   - Fields:
+     * `userId`: Reference to the candidate (`User` collection).
+     * `type`: Session mode ("resume" | "technical" | "hr").
+     * `role`: Target job title or subject area (e.g. "Frontend", "Java").
+     * `resumeId`: Optional reference to the candidate's parsed resume.
+     * `status`: Tracking flag ("in_progress" | "completed").
+     * `score`: Stored overall average score.
+     * `startedAt` & `completedAt`: Session timestamps.
+   - Logic: Holds the general state of the mock session.
+
+2. [interview-question.model.ts]
+   - Purpose: Defines the Mongoose Schema & TypeScript Interface (`IInterviewQuestion`) 
+     for questions mapped to specific interview sessions.
+   - Fields:
+     * `interviewId`: Back-reference to the parent `Interview` session.
+     * `question`: The generated prompt text.
+     * `category` & `difficulty`: Categorization fields.
+     * `answer`: Candidate's text input.
+     * `feedback`: Consolidated AI evaluation comments.
+     * `score`: Stored overall question score.
+     * `communicationScore`, `technicalAccuracyScore`, `confidenceScore`, 
+       `completenessScore`, `structureScore`: Individual AI-generated metrics (0-100).
+     * `strengths` & `weaknesses`: Arrays of bullet points.
+     * `improvedAnswer`: AI suggested model response.
+     * `followUps`: Pre-generated follow-up questions.
+   - Logic: Keeps track of both the question details and their individual 
+     detailed evaluations.
+
+B. LOGIC SERVICES (src/services/)
+========================================
+3. [interview-ai.service.ts]
+   - Purpose: Directs question generation using the Groq API.
+   - Logic: Contains three main generation triggers:
+     * `generateResumeQuestions`: Takes parsed resume data and queries the LLM to 
+       create 5 questions testing listed projects, skills, and certifications.
+     * `generateTechnicalQuestions`: Formulates 5 questions tailored to a specific 
+       topic (e.g. Frontend) and difficulty level (Easy/Medium/Hard) along with 
+       suggested follow-up items.
+     * `generateHRQuestions`: Generates 5 situational behavioral HR questions.
+   - Returns: Structured arrays of question objects using JSON response formats.
+
+4. [interview-evaluation.service.ts]
+   - Purpose: Directs candidate answer grading using the Groq API.
+   - Logic: Contains the `evaluateAnswer` function, which feeds the question and 
+     the candidate's text response to the LLM. It prompts the LLM to score the response
+     against the five metrics (0-100), identify positive qualities (strengths), 
+     negative qualities (weaknesses), outline summary advice, and compile a 
+     model answer. Uses the Groq JSON output mode to guarantee reliable parsing.
+
+5. [interview-analytics.service.ts]
+   - Purpose: Calculates aggregate stats for a completed interview.
+   - Logic: Averages the overall score and the five individual metric scores 
+     across all questions in a session. Returns a consolidated analytics object.
+
+6. [interview.service.ts]
+   - Purpose: Legacy rule-based generator.
+   - Logic: Contains fallback parsing logic to generate questions locally using 
+     regexes if AI keys are missing.
+
+C. BACKEND API ROUTES (src/app/api/interviews/)
+========================================
+7. [/api/interviews/route.ts]
+   - Purpose: Manages fetching past histories and starting mock sessions.
+   - GET Logic: Identifies the logged-in candidate, fetches all their interview 
+     documents, and returns them sorted by start date.
+   - POST Logic: Connects to MongoDB, retrieves inputs (type, role, difficulty, resume), 
+     calls the `interview-ai.service` to compile questions, inserts the parent 
+     `Interview` session, maps questions, and inserts them into `InterviewQuestion`.
+
+8. [/api/interviews/[id]/route.ts]
+   - Purpose: Handles details and final updates for a session.
+   - GET Logic: Resolves async route parameters, matches session ID, fetches the 
+     session details, and queries for all related questions.
+   - PATCH Logic: Triggered when concluding a session. Averages completed scores,
+     updates the session status to "completed", saves timestamps, and updates the database.
+
+9. [/api/interviews/[id]/questions/route.ts]
+   - Purpose: Fetches the questions list for an interview.
+   - GET Logic: Returns the existing questions stored in the database for the session.
+
+10. [/api/interviews/questions/[questionId]/answer/route.ts]
+    - Purpose: Grades a submitted response.
+    - POST Logic: Processes the answer input, feeds it to `interview-evaluation.service`,
+      saves the scores (overall + 5 metrics), strengths/weaknesses list, and the 
+      model answer template directly in the question document.
+
+D. FRONTEND PAGES (src/app/dashboard/)
+========================================
+11. [dashboard/page.tsx]
+    - Purpose: Entry board. Contains an access card to redirect candidates to 
+      the Mock Interview dashboard.
+
+12. [dashboard/interviews/page.tsx]
+    - Purpose: Mock Interviews Dashboard Landing Page.
+    - Logic: Displays summary metrics (completed sessions, average score) and lists 
+      all past sessions. Contains a Radix UI-based Dialog selector wizard, where 
+      candidates choose their interview mode, resume, topic, and difficulty to launch.
+
+13. [dashboard/interviews/[id]/page.tsx]
+    - Purpose: Interactive Active Simulation and Feedback report screen.
+    - Logic:
+      * Active State: Shows current question indices, progress bar, category tags, 
+        and potential follow-up suggestions. Provides a textarea with word count.
+        Submitting displays sequential loading texts simulating review.
+      * Evaluation View: Displays a breakdown of the 5 criteria with visual color-coded 
+        grade bars, key strengths, weaknesses, and a suggested model answer.
+      * Report View: Shows the finalized score, average metric charts, and an expandable 
+        accordion showing details for all questions in the completed session.
+
+--------------------------------------------------------------------------------
+3. THE 5 CORE SCORING METRICS
+--------------------------------------------------------------------------------
+1. Technical Accuracy (0-100)
+   - Evaluates factual correctness, depth of knowledge, and use of accurate terminology.
+2. Communication (0-100)
+   - Assesses the candidate's clarity, tone, and conciseness.
+3. Confidence (0-100)
+   - Measures assurance in answers, lack of hesitation, and assertiveness.
+4. Completeness (0-100)
+   - Checks if the response addresses all implicit and explicit parts of the question.
+5. Structure (0-100)
+   - Examines structural style (e.g. STAR method layout, chronological order, or listing).
+
+--------------------------------------------------------------------------------
+4. END-TO-END FLOW SUMMARY
+--------------------------------------------------------------------------------
+1. Startup: Candidate navigates to `/dashboard/interviews`, triggers the setup wizard modal, 
+   chooses the mode, and hits start.
+2. Initialization: Backend creates an `Interview` document, calls the AI to compile 5 questions, 
+   saves the questions linked to `interviewId`, and redirects the browser.
+3. Interactive Testing: Candidate answers questions one-by-one. Submitting sends the answer to 
+   `/api/interviews/questions/[id]/answer`, which runs the evaluation engine and saves metrics.
+4. Review: On the last question, the candidate clicks "Finish". Backend PATCHes the status to 
+   "completed", calculates final session averages, and displays the final evaluation dashboard.
+
+================================================================================
+FILE PURPOSE & HELP:
+This text file acts as the primary reference document detailing the architecture, 
+design patterns, and file-by-file logic of the AI Mock Interview system inside Prepora.
+It helps maintain architectural consistency and gives a clear mental model of the code.
+================================================================================

@@ -1,0 +1,99 @@
+================================================================================
+PREPORA: AUTHENTICATION SYSTEM DOCUMENTATION
+================================================================================
+
+This document details the architecture, data security, token lifecycle, and 
+file-by-file logic of Prepora's authentication and security system.
+
+--------------------------------------------------------------------------------
+1. AUTHENTICATION FLOW & SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+Prepora uses a double-token (Access + Refresh Token) JWT state-based authentication
+architecture. Cookies are used for persistent session storage and validation 
+rather than local storage to safeguard against Cross-Site Scripting (XSS) attacks.
+
+Key mechanisms:
+1. Registration & Hashing: Password strings are salted and hashed using bcryptjs.
+2. Sign-In: Upon valid credentials, the system issues two tokens:
+   - Access Token: Short-lived (15 minutes), used for immediate resource access.
+   - Refresh Token: Long-lived (7 days or 30 days if "Remember Me" is enabled),
+     used to fetch fresh Access Tokens when they expire.
+3. Secure Cookies: Tokens are returned in HTTP-Only, Secure, and SameSite=Lax
+   cookies. This ensures cookies are inaccessible via client-side JavaScript.
+4. Silent Token Refresh: A middleware or api gateway interceptor catches 401s
+   and requests /api/auth/refresh to swap the Refresh Token for a new Access Token.
+
+--------------------------------------------------------------------------------
+2. FILE-BY-FILE LOGIC AND USAGE
+--------------------------------------------------------------------------------
+
+A. UTILITIES AND CONFIGS (src/lib/)
+========================================
+1. [bcrypt.ts]
+   - Purpose: Directs salting and hashing.
+   - Functions:
+     * `hashPassword`: Uses a default round of 10 salts to hash credentials.
+     * `comparePassword`: Verifies whether a candidate plain-text matches the hash.
+
+2. [jwt.ts]
+   - Purpose: Handles JSON Web Token signature and validation.
+   - Functions:
+     * `signAccessToken` / `signRefreshToken`: Signs payloads with specific secrets.
+     * `verifyAccessToken` / `verifyRefreshToken`: Validates JWTs, returning payloads or null.
+
+3. [auth.ts]
+   - Purpose: Server-side authentication helper.
+   - Functions:
+     * `getCurrentUserId`: Extracts the access token from cookies, validates it, and 
+       returns the active MongoDB user ID.
+     * `getCurrentUser`: Extracts and returns the full decoded token payload.
+
+4. [token-hash.ts]
+   - Purpose: Cryptographic helper for reset and email verification tokens.
+   - Functions:
+     * Hashes one-time tokens (e.g. SHA-256) before storing them in the DB.
+
+B. DATA MODELS (src/models/)
+========================================
+5. [User.ts]
+   - Purpose: Mongoose schema representing candidates.
+   - Fields:
+     * `email` (unique, lowercase).
+     * `password` (hashed).
+     * `isVerified` (boolean).
+     * `verificationToken` / `resetPasswordToken` & expirations.
+   - Logic: Holds credential state and status flags.
+
+C. ENDPOINTS & ROUTES (src/app/api/auth/)
+========================================
+6. [register/route.ts]
+   - POST: Receives email, password. Checks for duplicates, hashes the password,
+     generates a verify-email token, creates the user, and sends a validation email.
+
+7. [login/route.ts]
+   - POST: Checks credentials via `comparePassword`. Signs access/refresh tokens.
+     Sets cookies: `accessToken` (HTTP-Only, 15m) and `refreshToken` (HTTP-Only, 7d/30d).
+
+8. [logout/route.ts]
+   - POST: Clears `accessToken` and `refreshToken` cookies immediately.
+
+9. [refresh/route.ts] & [refresh-token/route.ts]
+   - POST: Checks validity of `refreshToken` cookie. Queries database, signs a 
+     new `accessToken`, and updates cookies.
+
+10. [verify-email/route.ts]
+    - POST/GET: Receives a verify token, updates the user's `isVerified` field to true.
+
+11. [forgot-password/route.ts] & [reset-password/route.ts]
+    - Handles password resets by generating secure hashes, emailing verification links,
+      and updating credentials after verification.
+
+12. [me/route.ts]
+    - GET: Returns the currently authenticated user's profile details.
+
+================================================================================
+FILE PURPOSE & HELP:
+This text documentation file provides a complete technical map of Prepora's JWT 
+double-token cookie-based authentication flow, security layers, and endpoint structures.
+It serves as a comprehensive system design reference for team onboarding and review.
+================================================================================

@@ -101,7 +101,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Workspace Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Resume Card */}
           <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between">
             <div>
@@ -119,6 +119,27 @@ export default function DashboardPage() {
                 className="inline-block px-5 py-2.5 rounded-xl bg-black dark:bg-white text-white dark:text-black text-sm font-semibold hover:opacity-90 transition duration-200"
               >
                 Manage Resumes
+              </Link>
+            </div>
+          </div>
+
+          {/* AI Mock Interview Card */}
+          <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between border-t-2 border-t-indigo-500 dark:border-t-indigo-400">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 dark:text-indigo-400 flex items-center justify-center font-bold text-lg mb-4">
+                🚀
+              </div>
+              <h3 className="text-xl font-bold tracking-tight">AI Mock Interviews</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-relaxed">
+                Practice resume-based, technical, or HR questions. Receive instantaneous evaluation and detailed grades on 5 core metrics.
+              </p>
+            </div>
+            <div className="mt-6">
+              <Link
+                href="/dashboard/interviews"
+                className="inline-block px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white text-sm font-semibold transition duration-200"
+              >
+                Start Mock Interview
               </Link>
             </div>
           </div>
@@ -172,3 +193,12 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+/**
+ * FILE PURPOSE & HELP:
+ * This is the candidate dashboard landing page page component. It acts as the principal panel for
+ * navigating the platform. We have updated it to add a prominent action card for the "AI Mock Interviews"
+ * features. Users can view stats or immediately launch a new resume-based, technical, or HR interview session
+ * which directs them to the mock interview landing dashboard.
+ */
+

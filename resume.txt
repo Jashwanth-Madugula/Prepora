@@ -1,0 +1,114 @@
+================================================================================
+PREPORA: RESUME MANAGEMENT & ATS ENGINE DOCUMENTATION
+================================================================================
+
+This document details the architecture, file parsing pipeline, Cloudinary storage,
+ATS matching algorithm, and file-by-file logic of Prepora's Resume module.
+
+--------------------------------------------------------------------------------
+1. RESUME PARSING & ATS SCORING PIPELINE
+--------------------------------------------------------------------------------
+The Resume module handles uploading, processing, and grading of candidate resumes:
+
+             [PDF File Uploaded]
+                      │
+                      ▼
+     ┌───────────────────────────────────┐
+     │ 1. Extract PDF Buffer             │
+     │    (pdf-parse parsing to text)    │
+     └─────────────────┬─────────────────┘
+                       │
+                       ▼
+     ┌───────────────────────────────────┐
+     │ 2. Parallel Processing Actions    │
+     │    ├─ Upload PDF to Cloudinary    │
+     │    ├─ Parse Resume via Groq       │
+     │    └─ Analyze ATS Match via Groq  │
+     └─────────────────┬─────────────────┘
+                       │
+                       ▼
+     ┌───────────────────────────────────┐
+     │ 3. Save Resume Document in DB     │
+     │    (Stores Cloudinary URL, parsed │
+     │     JSON, ATS match results)      │
+     └───────────────────────────────────┘
+
+ATS Core Scorecard Analytics:
+- Parsed JSON: Structured data mapping name, email, skills, projects, work 
+  experience, education, and certifications.
+- ATS Score: Grading match against standard tech roles.
+- Keyword Analysis: Tracks keywords matched (green), keywords missing (red), 
+  and keyword density percentages.
+- Optimization Recommendations: AI-suggested modifications to optimize parsing.
+
+--------------------------------------------------------------------------------
+2. FILE-BY-FILE LOGIC AND USAGE
+--------------------------------------------------------------------------------
+
+A. DATA MODELS (src/models/)
+========================================
+1. [Resume.ts]
+   - Purpose: Mongoose Schema representing a candidate's uploaded resume.
+   - Fields:
+     * `userId`: Reference to the owner.
+     * `title`: User-defined label.
+     * `fileUrl` & `cloudinaryPublicId`: Remote file storage pointers.
+     * `status`: Tracking flag ("UPLOADED" | "PARSED" | "ANALYZED").
+     * `parsedData`: Nested schema storing parsed skills, projects, experience.
+     * `atsScore`, `atsSuggestions`, `atsKeywordsMatched`, `atsKeywordsMissing`,
+       `atsKeywordDensity`, `atsAnalyzedAt`: Core ATS results.
+
+B. LOGIC SERVICES (src/services/)
+========================================
+2. [pdf-parser.service.ts]
+   - Purpose: Text extraction service.
+   - Logic: Takes raw PDF buffer, calls `pdf-parse` library to extract plain string text.
+
+3. [resume-parser.service.ts]
+   - Purpose: Directs text structure extraction.
+   - Logic: Feeds the extracted plain text to the Groq LLM model with a strict JSON 
+     schema. The LLM parses it into structured arrays of skills, projects, and work history.
+     If the API is missing/fails, falls back to a regex-based parser extracting sections
+     under defined headings.
+
+4. [ats.service.ts]
+   - Purpose: Performs ATS keyword matching and grading.
+   - Logic: Feeds the resume text to Groq. The model compares it against industry standards, 
+     generating a match percentage score, listing matched vs. missing keywords, and 
+     proposing changes to resume structure/content.
+
+5. [cloudinary.service.ts]
+   - Purpose: Handles Cloudinary file management.
+   - Logic: Provides helpers to upload raw file buffers directly to Cloudinary folder locations
+     and deletes resumes when deleted by users.
+
+C. ENDPOINTS & ROUTES (src/app/api/resumes/)
+========================================
+6. [/api/resumes/route.ts]
+   - GET: Fetches the resumes list for the logged-in candidate.
+   - POST: Multi-part form handler. Reads the PDF file, extracts the text buffer,
+     runs Cloudinary upload and AI parsing, creates the database record, and returns it.
+
+7. [/api/resumes/[id]/route.ts]
+   - GET: Retrieves details for a specific resume.
+   - PATCH: Updates resume title or defaults status.
+   - DELETE: Removes the PDF from Cloudinary, deletes the MongoDB record, and shifts 
+     default status to another uploaded resume if necessary.
+
+D. FRONTEND PAGES (src/app/)
+========================================
+8. [resumes/page.tsx]
+   - Dashboard interface for uploading PDFs, showing lists of resumes, marking default,
+     and viewing basic ATS scores.
+
+9. [resumes/[id]/page.tsx]
+   - Detailed ATS analysis report view. Displays the resume PDF preview next to match
+     statistics, matched and missing keywords, keyword density charts, and detailed
+     improvement checklists.
+
+================================================================================
+FILE PURPOSE & HELP:
+This text documentation file provides a complete technical map of Prepora's resume
+management pipeline, Cloudinary uploads, PDF parsing service, ATS analytics match,
+and dashboard screens. It acts as an onboarding reference.
+================================================================================
