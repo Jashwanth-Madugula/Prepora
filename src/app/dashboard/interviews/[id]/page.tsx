@@ -17,14 +17,21 @@ import {
   ChevronUp,
   MessageSquare,
   Zap,
+  Mic,
+  Video,
+  Keyboard,
 } from "lucide-react";
 import { toast } from "sonner";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import AudioRecorder from "@/components/interview/audio-recorder";
+import VideoRecorder from "@/components/interview/video-recorder";
 
 // Rotating messages displayed while AI evaluates the answer
 const LOADING_MESSAGES = [
-  "Connecting to evaluation engine...",
-  "Analyzing vocabulary and communication clarity...",
+  "Uploading media recording to secure cloud...",
+  "Transcribing spoken response via Groq Whisper...",
+  "Connecting to AI evaluation engine...",
+  "Analyzing vocabulary, fluency and delivery clarity...",
   "Checking technical accuracy against reference concepts...",
   "Assessing structural logic and completeness...",
   "Scoring confidence indicators...",
@@ -47,6 +54,12 @@ export default function ActiveInterviewPage() {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [loadingTextIndex, setLoadingTextIndex] = useState(0);
   const [evaluation, setEvaluation] = useState<any>(null);
+
+  // Response mode and media blobs states
+  const [responseMode, setResponseMode] = useState<"text" | "audio" | "video">("text");
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
+  const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
 
   // Summary dashboard state
   const [isFinishing, setIsFinishing] = useState(false);
@@ -100,21 +113,100 @@ export default function ActiveInterviewPage() {
   }
 
   async function submitAnswer() {
-    if (!answer.trim()) {
-      toast.warning("Please type an answer before submitting.");
-      return;
-    }
+    const activeQuestion = questions[current];
+    let payload: any = {
+      answerType: responseMode,
+    };
 
     setIsEvaluating(true);
-    const activeQuestion = questions[current];
 
     try {
+      if (responseMode === "text") {
+        if (!answer.trim()) {
+          toast.warning("Please type an answer before submitting.");
+          setIsEvaluating(false);
+          return;
+        }
+        payload.answer = answer.trim();
+      } else if (responseMode === "audio") {
+        if (!recordedAudioBlob) {
+          toast.warning("Please record an audio response first.");
+          setIsEvaluating(false);
+          return;
+        }
+
+        // 1. Upload audio
+        setUploadProgress("Uploading audio to Cloudinary...");
+        const audioFormData = new FormData();
+        audioFormData.append("file", recordedAudioBlob, "audio.webm");
+
+        const uploadRes = await fetch("/api/interviews/upload-audio", {
+          method: "POST",
+          body: audioFormData,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success) {
+          throw new Error(uploadData.message || "Failed to upload audio file.");
+        }
+        payload.audioUrl = uploadData.url;
+
+        // 2. Transcribe audio
+        setUploadProgress("Transcribing audio via Groq Whisper...");
+        const transcribeRes = await fetch("/api/interviews/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audioUrl: uploadData.url }),
+        });
+        const transcribeData = await transcribeRes.json();
+        if (!transcribeData.success) {
+          throw new Error(transcribeData.message || "Failed to transcribe audio.");
+        }
+        payload.transcript = transcribeData.transcript;
+        payload.answer = transcribeData.transcript;
+      } else if (responseMode === "video") {
+        if (!recordedVideoBlob) {
+          toast.warning("Please record a video response first.");
+          setIsEvaluating(false);
+          return;
+        }
+
+        // 1. Upload video
+        setUploadProgress("Uploading video to Cloudinary...");
+        const videoFormData = new FormData();
+        videoFormData.append("file", recordedVideoBlob, "video.webm");
+
+        const uploadRes = await fetch("/api/interviews/upload-video", {
+          method: "POST",
+          body: videoFormData,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success) {
+          throw new Error(uploadData.message || "Failed to upload video file.");
+        }
+        payload.videoUrl = uploadData.url;
+
+        // 2. Transcribe video
+        setUploadProgress("Transcribing video audio via Groq Whisper...");
+        const transcribeRes = await fetch("/api/interviews/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audioUrl: uploadData.url }),
+        });
+        const transcribeData = await transcribeRes.json();
+        if (!transcribeData.success) {
+          throw new Error(transcribeData.message || "Failed to transcribe video audio.");
+        }
+        payload.transcript = transcribeData.transcript;
+        payload.answer = transcribeData.transcript;
+      }
+
+      setUploadProgress("Evaluating transcript with Groq Llama...");
       const res = await fetch(`/api/interviews/questions/${activeQuestion._id}/answer`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ answer: answer.trim() }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -124,7 +216,11 @@ export default function ActiveInterviewPage() {
         const updatedQuestions = [...questions];
         updatedQuestions[current] = {
           ...activeQuestion,
-          answer: answer.trim(),
+          answer: payload.answer || "",
+          answerType: responseMode,
+          transcript: payload.transcript || "",
+          audioUrl: payload.audioUrl || "",
+          videoUrl: payload.videoUrl || "",
           score: data.evaluation.overallScore,
           feedback: data.evaluation.feedback,
           technicalAccuracyScore: data.evaluation.technicalAccuracy,
@@ -132,6 +228,8 @@ export default function ActiveInterviewPage() {
           confidenceScore: data.evaluation.confidence,
           completenessScore: data.evaluation.completeness,
           structureScore: data.evaluation.structure,
+          clarityScore: data.evaluation.clarity,
+          fluencyScore: data.evaluation.fluency,
           strengths: data.evaluation.strengths,
           weaknesses: data.evaluation.weaknesses,
           improvedAnswer: data.evaluation.improvedAnswer,
@@ -142,11 +240,12 @@ export default function ActiveInterviewPage() {
       } else {
         toast.error(data.message || "Failed to evaluate answer");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("Error submitting answer");
+      toast.error(err.message || "Error submitting answer");
     } finally {
       setIsEvaluating(false);
+      setUploadProgress("");
     }
   }
 
@@ -180,6 +279,8 @@ export default function ActiveInterviewPage() {
 
   function handleNextQuestion() {
     setAnswer("");
+    setRecordedAudioBlob(null);
+    setRecordedVideoBlob(null);
     setEvaluation(null);
     if (current < questions.length - 1) {
       setCurrent(current + 1);
@@ -285,7 +386,7 @@ export default function ActiveInterviewPage() {
           </div>
 
           {/* Metric Breakdown Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
             {/* Compute averages of sub-metrics for visual dashboard */}
             {(() => {
               const metrics = [
@@ -298,7 +399,7 @@ export default function ActiveInterviewPage() {
                 {
                   label: "Communication",
                   key: "communicationScore",
-                  desc: "Clarity & articulation",
+                  desc: "Articulation",
                   emoji: "🗣️",
                 },
                 {
@@ -310,7 +411,7 @@ export default function ActiveInterviewPage() {
                 {
                   label: "Completeness",
                   key: "completenessScore",
-                  desc: "Coverage of issues",
+                  desc: "Coverage of issue",
                   emoji: "🎯",
                 },
                 {
@@ -318,6 +419,18 @@ export default function ActiveInterviewPage() {
                   key: "structureScore",
                   desc: "Logical flow",
                   emoji: "📐",
+                },
+                {
+                  label: "Clarity",
+                  key: "clarityScore",
+                  desc: "Coherency",
+                  emoji: "✨",
+                },
+                {
+                  label: "Fluency",
+                  key: "fluencyScore",
+                  desc: "Natural speech",
+                  emoji: "🌊",
                 },
               ];
 
@@ -327,18 +440,18 @@ export default function ActiveInterviewPage() {
                 return (
                   <div
                     key={m.label}
-                    className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 flex flex-col justify-between"
+                    className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 flex flex-col justify-between"
                   >
                     <div>
-                      <span className="text-xl mb-2 block">{m.emoji}</span>
-                      <h4 className="font-bold text-xs text-zinc-500 dark:text-zinc-400 leading-tight">
+                      <span className="text-lg mb-1 block">{m.emoji}</span>
+                      <h4 className="font-bold text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
                         {m.label}
                       </h4>
-                      <p className="text-[10px] text-zinc-400 mt-0.5 leading-tight">{m.desc}</p>
+                      <p className="text-[9px] text-zinc-400 mt-0.5 leading-tight">{m.desc}</p>
                     </div>
-                    <div className="mt-4">
-                      <div className="text-xl font-black">{avg}%</div>
-                      <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-1.5 rounded-full mt-2 overflow-hidden">
+                    <div className="mt-3">
+                      <div className="text-lg font-black">{avg}%</div>
+                      <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-1 rounded-full mt-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full ${getMetricBarColorClass(avg)}`}
                           style={{ width: `${avg}%` }}
@@ -401,21 +514,36 @@ export default function ActiveInterviewPage() {
                         {/* Candidate Answer */}
                         <div className="space-y-2">
                           <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                            Your Submitted Answer
+                            Your Submitted Response {q.answerType && `(${q.answerType})`}
                           </h5>
+                          
+                          {q.answerType === "audio" && q.audioUrl && (
+                            <div className="mb-2 p-2.5 bg-zinc-50 dark:bg-zinc-950/45 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                              <audio src={q.audioUrl} controls className="w-full h-8" />
+                            </div>
+                          )}
+
+                          {q.answerType === "video" && q.videoUrl && (
+                            <div className="mb-2 max-w-sm aspect-video bg-black rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                              <video src={q.videoUrl} controls className="w-full h-full object-cover" />
+                            </div>
+                          )}
+
                           <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20 text-zinc-700 dark:text-zinc-300 text-sm italic whitespace-pre-wrap leading-relaxed">
                             "{q.answer || "No response provided"}"
                           </div>
                         </div>
 
                         {/* Metric scores breakdown */}
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-zinc-50/50 dark:bg-zinc-950/10 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 bg-zinc-50/50 dark:bg-zinc-950/10 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
                           {[
                             { label: "Technical Accuracy", score: q.technicalAccuracyScore },
                             { label: "Communication", score: q.communicationScore },
                             { label: "Confidence", score: q.confidenceScore },
                             { label: "Completeness", score: q.completenessScore },
                             { label: "Structure", score: q.structureScore },
+                            { label: "Clarity", score: q.clarityScore },
+                            { label: "Fluency", score: q.fluencyScore },
                           ].map((item) => (
                             <div key={item.label}>
                               <div className="text-[10px] text-zinc-400 leading-tight font-medium">
@@ -620,25 +748,93 @@ export default function ActiveInterviewPage() {
             {/* If not evaluated yet and not evaluating, show input */}
             {!evaluation && !activeQuestion.answer && (
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-6 flex flex-col flex-1 shadow-sm space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-bold text-sm">Your Response</h3>
-                  <span className="text-xs text-zinc-400">
-                    {answer.split(/\s+/).filter(Boolean).length} words
-                  </span>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-zinc-100 dark:border-zinc-850 pb-3">
+                  <h3 className="font-bold text-sm">Response Method</h3>
+                  
+                  {/* Tab Selector */}
+                  <div className="flex gap-1 p-1 bg-zinc-100 dark:bg-zinc-850 rounded-xl w-fit">
+                    <button
+                      type="button"
+                      onClick={() => setResponseMode("text")}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                        responseMode === "text"
+                          ? "bg-white dark:bg-zinc-900 shadow text-indigo-650 dark:text-indigo-400"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+                      }`}
+                    >
+                      <Keyboard className="w-3.5 h-3.5" />
+                      Text
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setResponseMode("audio")}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                        responseMode === "audio"
+                          ? "bg-white dark:bg-zinc-900 shadow text-indigo-655 dark:text-indigo-400"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+                      }`}
+                    >
+                      <Mic className="w-3.5 h-3.5" />
+                      Audio
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setResponseMode("video")}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                        responseMode === "video"
+                          ? "bg-white dark:bg-zinc-900 shadow text-indigo-655 dark:text-indigo-400"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+                      }`}
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                      Video
+                    </button>
+                  </div>
                 </div>
 
-                <textarea
-                  className="w-full flex-1 border border-zinc-200 dark:border-zinc-850 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-transparent min-h-[250px] text-sm leading-relaxed"
-                  placeholder="Type your comprehensive answer here..."
-                  value={answer}
-                  disabled={isEvaluating}
-                  onChange={(e) => setAnswer(e.target.value)}
-                />
+                {/* Conditional inputs */}
+                {responseMode === "text" && (
+                  <div className="flex flex-col flex-1 space-y-2">
+                    <div className="flex justify-between items-center text-xs text-zinc-400">
+                      <span>Type your response</span>
+                      <span>
+                        {answer.split(/\s+/).filter(Boolean).length} words
+                      </span>
+                    </div>
 
-                <div className="flex justify-end pt-2">
+                    <textarea
+                      className="w-full flex-1 border border-zinc-200 dark:border-zinc-850 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-transparent min-h-[250px] text-sm leading-relaxed"
+                      placeholder="Type your comprehensive answer here..."
+                      value={answer}
+                      disabled={isEvaluating}
+                      onChange={(e) => setAnswer(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {responseMode === "audio" && (
+                  <div className="py-2">
+                    <AudioRecorder onRecordingComplete={(blob) => setRecordedAudioBlob(blob)} />
+                  </div>
+                )}
+
+                {responseMode === "video" && (
+                  <div className="py-2">
+                    <VideoRecorder onRecordingComplete={(blob) => setRecordedVideoBlob(blob)} />
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-3 border-t border-zinc-100 dark:border-zinc-850">
                   <button
                     onClick={submitAnswer}
-                    disabled={isEvaluating || !answer.trim()}
+                    disabled={
+                      isEvaluating || 
+                      (responseMode === "text" && !answer.trim()) ||
+                      (responseMode === "audio" && !recordedAudioBlob) ||
+                      (responseMode === "video" && !recordedVideoBlob)
+                    }
                     className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-semibold rounded-xl shadow transition disabled:opacity-50 cursor-pointer"
                   >
                     Submit & Evaluate Answer
@@ -653,9 +849,15 @@ export default function ActiveInterviewPage() {
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-12 flex flex-col items-center justify-center text-center flex-1 shadow-sm min-h-[300px]">
                 <Loader2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin mb-6" />
                 <h3 className="font-bold text-lg mb-2">Analyzing Answer</h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-sm transition-all duration-300 animate-pulse">
-                  {LOADING_MESSAGES[loadingTextIndex]}
-                </p>
+                {uploadProgress ? (
+                  <p className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 animate-pulse">
+                    {uploadProgress}
+                  </p>
+                ) : (
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-sm transition-all duration-300 animate-pulse">
+                    {LOADING_MESSAGES[loadingTextIndex]}
+                  </p>
+                )}
               </div>
             )}
 
@@ -682,7 +884,24 @@ export default function ActiveInterviewPage() {
                         </span>
                       </div>
 
-                      {/* 5 metrics list sliders */}
+                      {/* Display player for spoken responses on evaluated scorecard view */}
+                      {data.answerType === "audio" && data.audioUrl && (
+                        <div className="p-3 bg-zinc-50 dark:bg-zinc-950/45 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-zinc-450 block mb-1">Your Voice Response</span>
+                          <audio src={data.audioUrl} controls className="w-full h-8" />
+                        </div>
+                      )}
+
+                      {data.answerType === "video" && data.videoUrl && (
+                        <div className="p-3 bg-zinc-50 dark:bg-zinc-950/45 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-1.5">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-zinc-450 block">Your Video Response</span>
+                          <div className="max-w-md aspect-video bg-black rounded-lg overflow-hidden">
+                            <video src={data.videoUrl} controls className="w-full h-full object-cover" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 7 metrics list sliders */}
                       <div className="space-y-4">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                           Metric Breakdown
@@ -697,7 +916,7 @@ export default function ActiveInterviewPage() {
                             {
                               label: "Communication",
                               score: data.communicationScore,
-                              desc: "Clarity & concise articulation",
+                              desc: "Clarity & articulation",
                             },
                             {
                               label: "Confidence",
@@ -713,6 +932,16 @@ export default function ActiveInterviewPage() {
                               label: "Structure",
                               score: data.structureScore,
                               desc: "STAR structure & logical flow",
+                            },
+                            {
+                              label: "Clarity",
+                              score: data.clarityScore,
+                              desc: "Coherency & understanding",
+                            },
+                            {
+                              label: "Fluency",
+                              score: data.fluencyScore,
+                              desc: "Spoken flow & lack of stutter",
                             },
                           ].map((metric) => (
                             <div

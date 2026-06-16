@@ -1,0 +1,135 @@
+================================================================================
+PREPORA: AUDIO & VIDEO MOCK INTERVIEW SIMULATOR SYSTEM DOCUMENTATION
+================================================================================
+
+This document details the architecture, design patterns, file-by-file logic, 
+database structure, API specifications, and end-to-end data flow of the Prepora
+Audio & Video Mock Interview Simulator System.
+
+--------------------------------------------------------------------------------
+1. ARCHITECTURAL OVERVIEW & KEY CONCEPTS
+--------------------------------------------------------------------------------
+The Prepora Audio and Video interview system enhances mock interview simulations
+by allowing candidates to record spoken voice or webcam answers using standard
+HTML5 browser APIs, transcribing their recordings via Groq Whisper, and conducting
+AI evaluations of transcripts across 7 distinct communication dimensions.
+
+Key Architectural Components:
+- Front-End Recording (Client-Side): Native browser MediaRecorder API captures
+  audio and video streams dynamically, saving files locally in WebM format.
+- Secure Media Storage (Cloudinary): Recorded Blobs are streamed from the client
+  via multi-part form APIs directly to Cloudinary folder locations (prepora/interviews/audio
+  and prepora/interviews/video) to fit within Cloudinary's Free Tier bounds.
+- Transcription Pipeline (Groq Whisper): The server fetches uploaded audio/video clips,
+  streams them through the Groq speech-to-text API (using whisper-large-v3) to create text,
+  and unlinks local files securely in a finally block.
+- Granular AI Grading (7 Dimensions): Groq Llama-3.3-70b-versatile evaluates transcripts
+  taking the input format (text vs spoken voice/video) into consideration, returning scores
+  for Technical Accuracy, Communication, Confidence, Completeness, Structure, Clarity, and Fluency.
+
+--------------------------------------------------------------------------------
+2. DATA FLOW TIMELINE (STEP-BY-STEP)
+--------------------------------------------------------------------------------
+
+1. Setup: Candidate selects active interview page (/dashboard/interviews/[id]), which loads
+   questions from MongoDB.
+2. Select Input Mode: Candidate toggles response tabs:
+   - Text Mode: Input text directly into textarea.
+   - Audio Mode: Click microphone -> Start recording -> Captures voice via MediaRecorder.
+   - Video Mode: Click camera -> Renders mirror camera frame -> Start recording -> Captures video/audio.
+3. Local Review: Candidate can play preview clips to review their recording or re-record.
+4. Submission: Candidate clicks "Submit & Evaluate". Frontend displays progress spinner indicating:
+   - "Uploading media recording to secure cloud..."
+   - "Transcribing spoken response via Groq Whisper..."
+   - "Evaluating transcript with Groq Llama..."
+5. Upload (Server):
+   - POST /api/interviews/upload-audio OR POST /api/interviews/upload-video
+   - Converts File/Blob to Node.js Buffer, streams upload to Cloudinary.
+   - Returns secure URL pointing to the WebM file.
+6. Transcribe (Server):
+   - POST /api/interviews/transcribe
+   - Downloads WebM media clip from Cloudinary.
+   - Writes to a temporary workspace directory (src/temp) to comply with anti-sandbox constraints.
+   - Streams the temporary file to Groq Whisper Large V3.
+   - Deletes temporary stream file in a finally block and returns text transcript.
+7. Score & Persist (Server):
+   - POST /api/interviews/questions/[questionId]/answer
+   - Payload: { answerType, answer, transcript, audioUrl, videoUrl }
+   - Invokes evaluateAnswer service to score 7 dimensions.
+   - Saves all fields, URLs, transcripts, and AI-generated scorecard metrics to MongoDB.
+8. Update UI: Evaluated scorecard immediately displays granular score sliders, strengths,
+   weaknesses, exemplar suggestions, and includes built-in HTML5 players to review the audio/video.
+
+--------------------------------------------------------------------------------
+3. FILE-BY-FILE LOGIC
+--------------------------------------------------------------------------------
+
+A. DATA MODELS (src/models/)
+========================================
+1. [interview-question.model.ts]
+   - Modified TypeScript interface and Mongoose schema to support Audio/Video fields:
+     * `answerType`: "text" | "audio" | "video" (default: "text").
+     * `transcript`: holds raw speech-to-text text return from Groq.
+     * `audioUrl` & `videoUrl`: references the Cloudinary files.
+     * `clarityScore` & `fluencyScore`: new AI numeric scoring slots (0-100).
+   - Compatibility: `answer` field stores transcript text for audio/video modes,
+     ensuring older code works out of the box.
+
+B. LOGIC SERVICES (src/services/)
+========================================
+2. [cloudinary.service.ts]
+   - Added `uploadAudioBuffer` and `uploadVideoBuffer`.
+   - Uses `cloudinary.uploader.upload_stream` to upload files in WebM format to separate folders.
+   - Note: Cloudinary treats audio as resource_type: "video".
+3. [interview-evaluation.service.ts]
+   - Updated `evaluateAnswer` function signature to take `answerType` (default: "text").
+   - Added context guidance instructing Groq to evaluate transcribed text with minor filler
+     words/pauses differently than written text.
+   - Expanded prompt to grade 7 dimensions: Technical Accuracy, Communication, Confidence,
+     Completeness, Structure, Clarity, and Fluency.
+4. [interview-analytics.service.ts]
+   - Updated `calculateInterviewResult` to compute average scores for Clarity and Fluency.
+
+C. BACKEND API ROUTES (src/app/api/interviews/)
+========================================
+5. [/api/interviews/upload-audio/route.ts]
+   - Endpoint for uploading speech. Extracts audio file from form data, converts it to Buffer, and streams to Cloudinary.
+6. [/api/interviews/upload-video/route.ts]
+   - Endpoint for uploading webcam clips. Converts video file to Buffer and streams to Cloudinary.
+7. [/api/interviews/transcribe/route.ts]
+   - Endpoint for Whisper API. Downloads Cloudinary file, saves temporarily in src/temp, streams to Groq Whisper, and deletes the local file.
+8. [/api/interviews/questions/[questionId]/answer/route.ts]
+   - Receives answer metrics, calls evaluation engine, and commits results to Mongoose.
+
+D. FRONTEND COMPONENTS (src/components/interview/)
+========================================
+9. [audio-recorder.tsx]
+   - Interactive glassmorphic mic with live timers, start/stop recording control, and preview audio playback.
+10. [video-recorder.tsx]
+    - mirrored HTML5 video frame, live webcam feed preview, live recording timer, and preview video playback.
+
+E. FRONTEND PAGES (src/app/dashboard/interviews/[id]/)
+========================================
+11. [page.tsx]
+    - Added responsive Keyboard, Mic, and Video tabs to switch response methods.
+    - Integrated `<AudioRecorder />` and `<VideoRecorder />` components.
+    - Updated `submitAnswer` to chain media upload, Whisper transcription, and AI scoring.
+    - Added HTML5 audio/video player panels on evaluated scorecard views and final reports.
+    - Integrated Clarity and Fluency scores in dashboard average charts and accordion details.
+
+--------------------------------------------------------------------------------
+4. THE 7 SCORING METRICS
+--------------------------------------------------------------------------------
+1. Technical Accuracy (0-100): Depth of technology stack knowledge.
+2. Communication (0-100): Clear, professional speech or writing.
+3. Confidence (0-100): Strong tone, assertiveness, and authority.
+4. Completeness (0-100): Covers all parts of the question.
+5. Structure (0-100): Structured logic (e.g. STAR method).
+6. Clarity (0-100) [NEW]: Easily understandable language, lack of ambiguity.
+7. Fluency (0-100) [NEW]: Natural grammatical transition, absence of filler words.
+
+================================================================================
+FILE PURPOSE & HELP:
+This file serves as a reference documentation containing setup parameters, data
+flows, specifications and architectural notes for the Audio and Video Mock Interview System.
+================================================================================

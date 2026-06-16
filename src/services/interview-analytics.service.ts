@@ -12,6 +12,8 @@ export async function calculateInterviewResult(questions: any[]) {
       confidence: 0,
       completeness: 0,
       structure: 0,
+      clarity: 0,
+      fluency: 0,
     };
   }
 
@@ -21,6 +23,8 @@ export async function calculateInterviewResult(questions: any[]) {
   const confTotal = questions.reduce((sum, q) => sum + (q.confidenceScore || 0), 0);
   const compTotal = questions.reduce((sum, q) => sum + (q.completenessScore || 0), 0);
   const structTotal = questions.reduce((sum, q) => sum + (q.structureScore || 0), 0);
+  const clarityTotal = questions.reduce((sum, q) => sum + (q.clarityScore || 0), 0);
+  const fluencyTotal = questions.reduce((sum, q) => sum + (q.fluencyScore || 0), 0);
 
   const count = questions.length;
 
@@ -31,14 +35,21 @@ export async function calculateInterviewResult(questions: any[]) {
     confidence: Math.round(confTotal / count),
     completeness: Math.round(compTotal / count),
     structure: Math.round(structTotal / count),
+    clarity: Math.round(clarityTotal / count),
+    fluency: Math.round(fluencyTotal / count),
   };
 }
 
 /**
  * FILE PURPOSE & HELP:
  * This service computes overall and granular average scores (Communication, Technical Accuracy,
- * Confidence, Completeness, and Structure) for a completed interview session.
+ * Confidence, Completeness, Structure, Clarity, and Fluency) for a completed interview session.
  * It receives an array of answered questions, aggregates their individual score fields,
  * and outputs rounded average percentages. The resulting metrics object is stored in the interview
  * document and rendered on the interview summary screen to give visual progress charts.
+ *
+ * FLOW INVOLVEMENT:
+ * 1. Called in PATCH /api/interviews/[id] when status = "completed".
+ * 2. Compiles averages across the 7 criteria for all interview question models linked to the session.
+ * 3. Results are saved to the parent Interview document and returned in the final API response.
  */

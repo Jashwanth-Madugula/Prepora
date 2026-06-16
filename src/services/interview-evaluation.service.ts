@@ -9,22 +9,32 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
  */
 export async function evaluateAnswer(
   question: string,
-  answer: string
+  answer: string,
+  answerType: "text" | "audio" | "video" = "text"
 ): Promise<string> {
+  const typeLabel = answerType === "text" ? "written text" : `${answerType} recording transcription`;
+  const contextInstruction = answerType !== "text"
+    ? `Note: The candidate's response was spoken and transcribed using speech-to-text. Please evaluate the answer content, keeping in mind that spoken answers may contain minor colloquialisms, pauses, or filler words, but should still be scored on their professional clarity, fluency, confidence, structure, and correctness.`
+    : `Note: The candidate's response was submitted as a typed text answer. Evaluate it accordingly.`;
+
   const prompt = `You are a senior technical and HR interviewer. Evaluate the candidate's answer for the question below.
 
 Question:
 ${question}
 
-Candidate Answer:
+Candidate Answer (submitted via ${typeLabel}):
 ${answer}
 
-Evaluate the response on a scale of 0 to 100 for the following five criteria:
+${contextInstruction}
+
+Evaluate the response on a scale of 0 to 100 for the following criteria:
 1. Technical Accuracy: Is the answer correct, precise, and relevant to the technology/framework mentioned?
 2. Communication: Is the answer spoken/written clearly, professionally, and without rambling?
 3. Confidence: Does the answer convey confidence, expertise, and authority on the subject?
 4. Completeness: Does the answer address all parts of the question?
 5. Structure: Is the answer well-structured (e.g. using STAR method, dividing into background/action/result, or structured logically)?
+6. Clarity: Is the answer easy to understand, coherent, and free of confusing jargon or ambiguous phrases?
+7. Fluency: Is the language natural, smooth, grammatically correct, and free of excessive stuttering or repetitive filler terms?
 
 Provide constructive feedback, key strengths, key weaknesses, and a suggested high-quality improved answer that a senior professional would write.
 
@@ -36,6 +46,8 @@ Return your evaluation in this JSON format:
   "confidence": 0,
   "completeness": 0,
   "structure": 0,
+  "clarity": 0,
+  "fluency": 0,
   "strengths": ["strength 1", "strength 2"],
   "weaknesses": ["weakness 1/area of improvement"],
   "feedback": "Detailed overall feedback summary here.",
@@ -61,8 +73,21 @@ Ensure it is a valid JSON object. Do not write any conversational text or markdo
 /**
  * FILE PURPOSE & HELP:
  * This evaluation engine service evaluates candidate responses using LLM-based parsing.
- * It scores candidates on five critical metrics: Communication, Technical Accuracy,
- * Confidence, Completeness, and Structure.
- * It leverages the Groq SDK client to run the evaluation prompt and returns a structured JSON
- * payload containing scores, feedback, list of strengths and weaknesses, and an improved response template.
+ * It has been updated to evaluate candidate responses across 7 metrics:
+ * - Technical Accuracy (factual alignment and depth of stack knowledge)
+ * - Communication (overall professional articulation)
+ * - Confidence (strength of tone and conviction)
+ * - Completeness (covering all parts of the prompt)
+ * - Structure (logical organization e.g. STAR technique)
+ * - Clarity (ease of comprehension, readability)
+ * - Fluency (smooth grammatical transition, absence of filler words)
+ *
+ * It takes into consideration whether the input was submitted as 'text', 'audio', or 'video'.
+ * When evaluation is complete, it parses the JSON response containing overall percentage grades,
+ * granular metrics, qualitative bullet points, and an exemplary suggested answer response.
+ *
+ * FLOW INVOLVEMENT:
+ * 1. Called in POST /api/interviews/questions/[questionId]/answer.
+ * 2. Connects to Groq Llama model with schema enforcement.
+ * 3. Returns structured output string to be parsed and written to MongoDB.
  */

@@ -37,11 +37,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { answer } = body;
+    const { answer, answerType, audioUrl, videoUrl, transcript } = body;
 
-    if (typeof answer !== "string") {
+    const type = answerType || "text";
+    const contentToEvaluate = type === "text" ? answer : transcript;
+
+    if (typeof contentToEvaluate !== "string") {
       return NextResponse.json(
-        { success: false, message: "Answer must be a string" },
+        { success: false, message: "Response content must be a string" },
         { status: 400 }
       );
     }
@@ -54,12 +57,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Call AI service to evaluate the response
-    const evaluationString = await evaluateAnswer(question.question, answer.trim());
+    // Call AI service to evaluate the response (transcribed speech or written text)
+    const evaluationString = await evaluateAnswer(question.question, contentToEvaluate.trim(), type);
     const result = JSON.parse(evaluationString);
 
     // Save candidate answers and metrics into the database
-    question.answer = answer.trim();
+    question.answer = contentToEvaluate.trim(); // store text transcript as answer for backward compatibility
+    question.answerType = type;
+    question.transcript = type === "text" ? "" : (transcript || "");
+    question.audioUrl = audioUrl || "";
+    question.videoUrl = videoUrl || "";
+
     question.score = result.overallScore || 0;
     question.feedback = result.feedback || "";
     question.technicalAccuracyScore = result.technicalAccuracy || 0;
@@ -67,6 +75,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     question.confidenceScore = result.confidence || 0;
     question.completenessScore = result.completeness || 0;
     question.structureScore = result.structure || 0;
+    question.clarityScore = result.clarity || 0;
+    question.fluencyScore = result.fluency || 0;
+    
     question.strengths = result.strengths || [];
     question.weaknesses = result.weaknesses || [];
     question.improvedAnswer = result.improvedAnswer || "";
@@ -90,9 +101,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 /**
  * FILE PURPOSE & HELP:
  * This API endpoint handles POST requests to submit and grade an answer for a specific question.
- * It connects to MongoDB, retrieves the question, feeds both the question text and candidate's
- * response to the AI evaluation engine, and processes the JSON scores.
- * The scores for Technical Accuracy, Communication, Confidence, Completeness, and Structure, 
- * as well as lists of strengths, weaknesses, and a suggested improved answer, are saved back to
- * the question document for long-term tracking and display.
+ * It connects to MongoDB, retrieves the question, and handles text, audio, and video inputs.
+ * If the input was spoken, it receives the media URLs and transcripts and evaluates the speech-to-text content.
+ *
+ * Scoring:
+ * Grades candidate response across 7 criteria:
+ * Technical Accuracy, Communication, Confidence, Completeness, Structure, Clarity, and Fluency.
+ * Saved results are subsequently rendered in the candidate scorecard dashboards.
+ *
+ * FLOW INVOLVEMENT:
+ * 1. Frontend submits candidate response block (and any Cloudinary media links) here.
+ * 2. Evaluates the text content using the evaluateAnswer service.
+ * 3. Persists all values back to the MongoDB InterviewQuestion model and replies.
  */
