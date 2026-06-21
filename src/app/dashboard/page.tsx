@@ -75,6 +75,18 @@ export default function DashboardPage() {
           <div className="flex items-center gap-4">
             <ThemeToggle />
             <Link
+              href="/dashboard/coding"
+              className="text-sm font-semibold hover:text-zinc-500 transition duration-200"
+            >
+              Coding
+            </Link>
+            <Link
+              href="/dashboard/analytics"
+              className="text-sm font-semibold hover:text-zinc-500 transition duration-200"
+            >
+              Analytics
+            </Link>
+            <Link
               href="/profile"
               className="text-sm font-semibold hover:text-zinc-500 transition duration-200"
             >
@@ -83,7 +95,7 @@ export default function DashboardPage() {
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition duration-200 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-850 transition duration-200 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {isLoggingOut ? "Signing Out..." : "Sign Out"}
             </button>
@@ -96,12 +108,12 @@ export default function DashboardPage() {
         <div className="mb-2">
           <h1 className="text-3xl font-extrabold tracking-tight mb-2">Welcome Back!</h1>
           <p className="text-zinc-500 dark:text-zinc-400">
-            Access your interview workspace, update academic credentials, and optimize resumes.
+            Access your interview workspace, practice aptitude tests, track career analytics, and optimize resumes.
           </p>
         </div>
 
         {/* Workspace Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Resume Card */}
           <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between">
             <div>
@@ -140,6 +152,69 @@ export default function DashboardPage() {
                 className="inline-block px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white text-sm font-semibold transition duration-200"
               >
                 Start Mock Interview
+              </Link>
+            </div>
+          </div>
+
+          {/* Aptitude Prep Workspace Card */}
+          <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between border-t-2 border-t-purple-500 dark:border-t-purple-400">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold text-lg mb-4">
+                🧠
+              </div>
+              <h3 className="text-xl font-bold tracking-tight">Aptitude Prep Workspace</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-relaxed">
+                Strengthen quantitative, logical, and verbal capabilities. Take adaptive tests or prepare using specific company exam mocks.
+              </p>
+            </div>
+            <div className="mt-6">
+              <Link
+                href="/dashboard/aptitude"
+                className="inline-block px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600 text-white text-sm font-semibold transition duration-200"
+              >
+                Open Workspace
+              </Link>
+            </div>
+          </div>
+
+          {/* AI Coding Rounds Card */}
+          <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between border-t-2 border-t-amber-500 dark:border-t-amber-400">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-955/50 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-lg mb-4">
+                💻
+              </div>
+              <h3 className="text-xl font-bold tracking-tight">AI Coding Rounds</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-relaxed">
+                Practice quantitative and logical coding rounds. Solve dynamic programming, string, or graph challenges with immediate compiler outputs and AI logic grading.
+              </p>
+            </div>
+            <div className="mt-6">
+              <Link
+                href="/dashboard/coding"
+                className="inline-block px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-705 dark:bg-amber-500 dark:hover:bg-amber-600 text-white text-sm font-semibold transition duration-200"
+              >
+                Start Coding Practice
+              </Link>
+            </div>
+          </div>
+
+          {/* AI Career Analytics Card */}
+          <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between border-t-2 border-t-emerald-500 dark:border-t-emerald-400">
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-500 dark:text-emerald-400 flex items-center justify-center font-bold text-lg mb-4">
+                📈
+              </div>
+              <h3 className="text-xl font-bold tracking-tight">AI Career Analytics</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 leading-relaxed">
+                Analyze your performance scores across resumes, mock interviews, and aptitude. Review strengths and personalized action plan suggestions.
+              </p>
+            </div>
+            <div className="mt-6">
+              <Link
+                href="/dashboard/analytics"
+                className="inline-block px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white text-sm font-semibold transition duration-200"
+              >
+                View Analytics
               </Link>
             </div>
           </div>

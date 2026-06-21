@@ -160,7 +160,10 @@ export default async function LandingPage() {
                 Practice complex coding tests, data structures, and algorithmic problems with instant unit tests feedback.
               </p>
             </div>
-            <div className="mt-8 text-xs font-semibold text-zinc-450 dark:text-zinc-550 uppercase tracking-wider">Coming soon in Phase 2</div>
+            <div className="mt-8 text-xs font-semibold text-emerald-600 dark:text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Active Now
+            </div>
           </div>
         </div>
       </section>

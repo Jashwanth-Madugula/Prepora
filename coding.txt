@@ -1,0 +1,121 @@
+PREPORA - AI CODING ROUND MODULE DOCUMENTATION
+=================================================
+
+This file provides a comprehensive overview of all source files, schemas, utilities, and components related to the Coding Round Module in Prepora. It outlines the architecture, data flow, usage, and specific design patterns utilized in this feature.
+
+-------------------------------------------------
+1. ARCHITECTURE OVERVIEW (AI-SIMULATED COMPILER)
+-------------------------------------------------
+The Coding Round Module simulates a premium coding platform (similar to HackerRank, LeetCode, or company-specific OA assessments) WITHOUT requiring an external, heavy compiler sandbox (like Piston, Judge0, or Docker). Instead, it implements a high-performance **AI-Simulated Code Sandbox**:
+1. User landing: User views dashboard metrics, past round scores, and selects a round difficulty (Easy, Medium, Hard).
+2. Question generation: An AI model (Llama-3.3-70b-versatile via Groq) generates a high-quality problem statement, constraints, standard sample cases, hidden test cases, and starter code skeletons for Java, Python, C++, C, and JavaScript.
+3. Database creation: The generated question is stored in `CodingQuestion`, and an attempt session is created in `CodingAttempt` mapping the authenticated candidate to the question.
+4. Workspace IDE: The user solves the problem inside Monaco Editor. They can switch languages, run drafts against custom inputs, or request real-time AI Hints and Section-by-Section Explanations.
+5. AI Code Execution: When drafting run tests, Prepora calls Groq Llama to trace the execution steps for the language, written script, and standard input values, returning simulated `stdout` / `stderr` and validating if the output matches expected sample results.
+6. AI Evaluation & Grading: When submitting the solution, Prepora calls the AI judge once. Llama evaluates the correctness of the logic, predicts the hidden test case success pass rate (0-100%), determines complexities, and generates strengths and areas for improvement.
+
+This hybrid AI execution model is:
+- **Fast & Light**: Does not rely on Piston servers or VM runtimes.
+- **Highly Deployable**: Fully compatible with Vercel, Netlify, Railway, or Render serverless functions.
+- **Fit for Placement Prep**: Checks whether candidate algorithms are correct, rather than struggling to run arbitrary user code safely.
+
+-------------------------------------------------
+2. DIRECTORY & SOURCE FILES LIST
+-------------------------------------------------
+
+A. DATABASE MODELS (src/models/)
+---------------------------------
+1. [coding-question.model.ts] (file:///d:/prepora/src/models/coding-question.model.ts)
+   - Why this file: Stores generated coding questions.
+   - Database Schema:
+     * title: String (Required)
+     * description: String (Problem statement, input/output constraints; Required)
+     * difficulty: String ("easy", "medium", "hard"; Required)
+     * topic: String (e.g. Arrays, Strings; Required)
+     * constraints: Array of Strings
+     * examples: Array of { input, output, explanation }
+     * starterCode: Map of Strings (Key is language like "javascript", value is skeleton code; converted to Map to support multiple skeletons)
+     * timeLimit: Number (seconds; default 1)
+     * memoryLimit: Number (MB; default 256)
+     * hiddenTestCases: Array of { input, expectedOutput }
+
+2. [coding-attempt.model.ts] (file:///d:/prepora/src/models/coding-attempt.model.ts)
+   - Why this file: Tracks candidate assessments and stores drafts, timing, and AI evaluations.
+   - Database Schema:
+     * userId: ObjectId (References User; Required)
+     * questionId: ObjectId (References CodingQuestion; Required)
+     * language: String (Preferred editor language)
+     * code: String (Written code submission)
+     * score: Number (Computed overall grade, 0-100)
+     * passedCases: Number (Grading pass count)
+     * totalCases: Number (Total hidden test cases)
+     * timeTaken: Number (Seconds elapsed during solve)
+     * complexity: String (AI calculated Big-O runtime, e.g. "O(N)")
+     * samplePassed: Boolean (Whether the basic sample tests passed)
+     * predictedPassRate: Number (AI predicted pass rate out of 100 on hidden test cases)
+     * status: String ("in_progress", "submitted"; default "in_progress")
+     * aiReview: Subdocument storing:
+       - correctness: Number (AI grade, 0-100)
+       - codeQuality: Number (AI code quality, 0-100)
+       - edgeCasesMissing: Array of Strings
+       - strengths: Array of Strings
+       - improvements: Array of Strings
+       - finalComment: String (Interviewer summary remarks)
+
+B. SERVICES LAYER (src/services/)
+----------------------------------
+1. [code-runner.service.ts] (file:///d:/prepora/src/services/code-runner.service.ts)
+   - Why this file: Simulates code run execution in a low-temperature Groq Llama compiler environment.
+   - Implementation: Prompts Groq to act as a compiler sandbox, tracing variable modifications and tracing logic. Outputs execution stdout, stderr, and sample comparison status maps.
+
+2. [judge.service.ts] (file:///d:/prepora/src/services/judge.service.ts)
+   - Why this file: Evaluates and grades code logic against hidden test cases.
+   - Implementation: Prompts Groq Llama to trace the user's code against all hidden cases, calculating passed counts, overall success probabilities (0-100%), and generating detailed FAANG-level critique review profiles.
+
+3. [coding.service.ts] (file:///d:/prepora/src/services/coding.service.ts)
+   - Why this file: Generates interview questions dynamically.
+   - Implementation: Prompts Groq to return JSON detailing description text, constraints, examples, hidden cases, and standard I/O reader skeletons for Java, Python, C++, C, and JS.
+
+C. API ENDPOINTS (src/app/api/coding/)
+---------------------------------------
+1. [GET /api/coding] (file:///d:/prepora/src/app/api/coding/route.ts)
+   - Why this file: Fetches candidate dashboard details.
+   - Implementation: Reads JWT cookie cookies, queries `CodingAttempt` matching user ID, populates related question details, and returns historical list sorted by time.
+
+2. [POST /api/coding/generate] (file:///d:/prepora/src/app/api/coding/generate/route.ts)
+   - Why this file: Generates and registers coding round questions.
+   - Implementation: Invokes AI generation, validates and writes the results to `CodingQuestion` collection, and returns the saved document.
+
+3. [POST /api/coding/start] (file:///d:/prepora/src/app/api/coding/start/route.ts)
+   - Why this file: Initializes the session attempt.
+   - Implementation: Validates JWT token, registers a new `CodingAttempt` in the DB with status `in_progress`, and returns the entry.
+
+4. [POST /api/coding/run] (file:///d:/prepora/src/app/api/coding/run/route.ts)
+   - Why this file: Sandboxes drafting executions using the AI simulation sandbox.
+   - Implementation: Takes input standard buffers and draft code, calls `code-runner.service.ts` to simulate output, and returns stdout/stderr compile results.
+
+5. [POST /api/coding/submit] (file:///d:/prepora/src/app/api/coding/submit/route.ts)
+   - Why this file: Performs official grading and reviews.
+   - Implementation: Grades code against hidden cases, requests AI critique metrics, computes overall weighted grade, updates `CodingAttempt` database status to `submitted`, and returns review dashboard data.
+
+6. [GET /api/coding/[attemptId]] (file:///d:/prepora/src/app/api/coding/%5BattemptId%5D/route.ts)
+   - Why this file: Populates the workspace editor page.
+   - Implementation: Fetches a single attempt by ID, populates the question contents, and validates user authorization ownership.
+
+7. [POST /api/coding/hint] (file:///d:/prepora/src/app/api/coding/hint/route.ts)
+   - Why this file: Delivers dynamic hints during drafts.
+   - Implementation: Prompts Groq with problem constraints and candidate draft code to return conceptual logic tips without direct code dumps.
+
+8. [POST /api/coding/explain] (file:///d:/prepora/src/app/api/coding/explain/route.ts)
+   - Why this file: Breaks down solution lines.
+   - Implementation: Queries Groq to create section-by-section markdown explanations of written scripts.
+
+D. FRONTEND INTERFACES (src/app/dashboard/coding/)
+---------------------------------------------------
+1. [/dashboard/coding/page.tsx] (file:///d:/prepora/src/app/dashboard/coding/page.tsx)
+   - Why this file: Mock Coding Round Landing Dashboard.
+   - UI Elements: Stat headers (Solved counts, AI scores, practice volume), selection cards (Easy, Medium, Hard with clock targets), and a past round attempts table linked to resume editors or AI reviews.
+
+2. [/dashboard/coding/[attemptId]/page.tsx] (file:///d:/prepora/src/app/dashboard/coding/%5BattemptId%5D/page.tsx)
+   - Why this file: Online IDE workspace interface.
+   - UI Elements: Split screen layout. Left: tabs for problem details, AI Review metrics, hints list, and code explainer. Right: language controls, Monaco Editor, tick countdown timer (synced relative to DB creation time to block cheat attempts), standard test case execution console, compile output drawers, and submit CTA actions.
