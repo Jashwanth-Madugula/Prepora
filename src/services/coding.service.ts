@@ -13,13 +13,21 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY!,
 });
 
-export async function generateCodingQuestion(difficulty: string) {
+export async function generateCodingQuestion(difficulty: string, topic?: string, company?: string) {
   const normalizedDifficulty = difficulty.toLowerCase() as "easy" | "medium" | "hard";
+
+  let specificContext = "";
+  if (topic) {
+    specificContext += `The question MUST be based on the Data Structures and Algorithms (DSA) topic: "${topic}".\n`;
+  }
+  if (company) {
+    specificContext += `The question structure, style, and complexity MUST match those frequently asked in tech interview rounds at the company: "${company}".\n`;
+  }
 
   const prompt = `
 You are a senior software engineer and technical interviewer at a FAANG company.
 Generate ONE high-quality coding interview question of difficulty "${normalizedDifficulty}".
-
+${specificContext}
 The question should be suitable for online compiler testing using standard input/output.
 Provide a complete JSON object matching the following structure:
 
@@ -27,7 +35,7 @@ Provide a complete JSON object matching the following structure:
   "title": "Short Descriptive Title",
   "description": "Clear problem statement. Describe the problem, the required logic, the input format, and the output format. Ensure the user knows how their program will receive input (from stdin) and how they must print output (to stdout).",
   "difficulty": "${normalizedDifficulty}",
-  "topic": "Topic category, e.g. Arrays, Strings, Sorting, Stack, Dynamic Programming",
+  "topic": "${topic || "Topic category, e.g. Arrays, Strings, Sorting, Stack, Dynamic Programming"}",
   "constraints": [
     "e.g. 1 <= N <= 10^5",
     "e.g. -10^9 <= arr[i] <= 10^9"

@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Mic, Square, Play, Pause, RotateCcw, Trash2 } from "lucide-react";
 
 interface AudioRecorderProps {
-  onRecordingComplete: (blob: Blob | null) => void;
+  onRecordingComplete: (blob: Blob | null, duration?: number) => void;
 }
 
 /**
@@ -35,6 +35,7 @@ export default function AudioRecorder({ onRecordingComplete }: AudioRecorderProp
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingStartTimestampRef = useRef<number>(0);
 
   // Synchronize recording timer
   useEffect(() => {
@@ -56,8 +57,9 @@ export default function AudioRecorder({ onRecordingComplete }: AudioRecorderProp
   const startRecording = async () => {
     setAudioChunks([]);
     setAudioUrl(null);
-    onRecordingComplete(null);
+    onRecordingComplete(null, 0);
     setRecordingTime(0);
+    recordingStartTimestampRef.current = Date.now();
 
     if ("MediaRecorder" in window) {
       try {
@@ -79,11 +81,12 @@ export default function AudioRecorder({ onRecordingComplete }: AudioRecorderProp
         };
 
         media.onstop = () => {
+          const duration = Math.round((Date.now() - recordingStartTimestampRef.current) / 1000);
           const audioBlob = new Blob(localChunks, { type: "audio/webm" });
           const audioUrlData = URL.createObjectURL(audioBlob);
           setAudioUrl(audioUrlData);
           setAudioChunks([]);
-          onRecordingComplete(audioBlob);
+          onRecordingComplete(audioBlob, duration);
         };
 
         media.start(250); // Emit chunk every 250ms
@@ -120,7 +123,7 @@ export default function AudioRecorder({ onRecordingComplete }: AudioRecorderProp
     setAudioChunks([]);
     setRecordingTime(0);
     setIsPlaying(false);
-    onRecordingComplete(null);
+    onRecordingComplete(null, 0);
   };
 
   // Toggle audio playback preview

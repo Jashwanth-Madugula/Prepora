@@ -2,8 +2,8 @@ import React from "react";
 import RegisterForm from "@/components/auth/RegisterForm";
 
 export const metadata = {
-  title: "Create Account - Prepora",
-  description: "Create a new Prepora account",
+  title: "Create Account - Rehearsa AI",
+  description: "Create a new Rehearsa AI account",
 };
 
 export default function RegisterPage() {

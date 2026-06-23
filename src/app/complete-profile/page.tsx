@@ -29,6 +29,7 @@ export default function CompleteProfilePage() {
       experienceLevel: "student",
       skills: [],
       targetCompanies: [],
+      placementGoal: "Product",
     },
   });
 
@@ -129,7 +130,7 @@ export default function CompleteProfilePage() {
             Complete your profile
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 font-medium">
-            Let's customize Prepora to match your background and career goals.
+            Let's customize Rehearsa AI to match your background and career goals.
           </p>
         </div>
 
@@ -374,6 +375,21 @@ export default function CompleteProfilePage() {
           {/* STEP 3: Skills, Target Companies, and Socials */}
           {step === 3 && (
             <div className="space-y-4">
+              {/* Placement Goal */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">
+                  Placement Goal
+                </label>
+                <select
+                  {...register("placementGoal")}
+                  className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-850 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white transition duration-200 text-sm appearance-none cursor-pointer"
+                >
+                  <option value="Product">Product Companies (FAANG, SaaS, Fintech)</option>
+                  <option value="Service">Service Companies (TCS, Infosys, Accenture)</option>
+                  <option value="Startup">Startups / Early-Stage Companies</option>
+                </select>
+              </div>
+
               {/* Skills Tags Input */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5">

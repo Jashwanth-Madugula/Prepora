@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     
     // Invalidate all active sessions upon password reset
     user.refreshToken = undefined;
+    user.refreshTokens = [];
     
     // Automatically verify user if they were not verified yet (since they completed email flow)
     if (!user.isVerified) {

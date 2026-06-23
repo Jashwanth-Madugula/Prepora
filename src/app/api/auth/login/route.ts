@@ -109,8 +109,27 @@ export async function POST(req: NextRequest) {
     const accessToken = signAccessToken({ userId: user._id, email: user.email, role: user.role });
     const refreshToken = signRefreshToken({ userId: user._id, email: user.email, role: user.role, rememberMe }, rememberMe);
 
-    // Save hashed refresh token to user document
-    user.refreshToken = await hashToken(refreshToken);
+    // Save hashed refresh token to user document and session list
+    const tokenHash = await hashToken(refreshToken);
+    user.refreshToken = tokenHash;
+
+    const userAgent = req.headers.get("user-agent") || "Unknown Device";
+    if (!user.refreshTokens) {
+      user.refreshTokens = [];
+    }
+    user.refreshTokens.push({
+      tokenHash,
+      ipAddress: ip,
+      userAgent,
+      createdAt: new Date(),
+      lastActive: new Date(),
+    });
+
+    // Limit concurrent sessions to 5 to prevent document bloat
+    if (user.refreshTokens.length > 5) {
+      user.refreshTokens.shift();
+    }
+
     await user.save();
 
     // Set cookies

@@ -13,6 +13,7 @@ import {
 } from "@/services/resume-parser.service";
 import {
   analyzeATSWithGroq,
+  compareResumeWithJD,
 } from "@/services/ats.service";
 
 export async function POST(
@@ -48,6 +49,11 @@ export async function POST(
       formData.get(
         "title"
       ) as string;
+
+    const jobDescription =
+      formData.get(
+        "jobDescription"
+      ) as string || undefined;
 
     if (!file) {
       return NextResponse.json(
@@ -91,6 +97,16 @@ export async function POST(
     const parsedData = await parseResumeWithGroq(parsedText);
     const atsResult = await analyzeATSWithGroq(parsedText);
 
+    // If jobDescription is provided, run immediate comparison
+    let jdResult: any = null;
+    if (jobDescription && jobDescription.trim()) {
+      try {
+        jdResult = await compareResumeWithJD(parsedText, jobDescription.trim());
+      } catch (err) {
+        console.error("Immediate Job Description ATS analysis failed:", err);
+      }
+    }
+
     const uploadResult =
       await uploadResumeBuffer(
         buffer,
@@ -133,12 +149,22 @@ export async function POST(
         status: ResumeStatus.ANALYZED,
         parsedText,
         parsedData,
-        atsScore: atsResult.score,
+        atsScore: jdResult && jdResult.atsScore && jdResult.atsScore > atsResult.score ? jdResult.atsScore : atsResult.score,
         atsSuggestions: atsResult.suggestions,
         atsKeywordsMatched: atsResult.keywordAnalysis?.matchedKeywords || [],
         atsKeywordsMissing: atsResult.keywordAnalysis?.missingKeywords || [],
         atsKeywordDensity: atsResult.keywordAnalysis?.keywordDensity || "",
         atsAnalyzedAt: new Date(),
+
+        // Populate Job Description fields if evaluated
+        ...(jdResult && {
+          jdText: (jobDescription || "").trim(),
+          jdMatchPercentage: jdResult.matchPercentage,
+          jdMissingSkills: jdResult.missingSkills,
+          jdMissingKeywords: jdResult.missingKeywords,
+          jdStrengths: jdResult.strengths,
+          jdSuggestions: jdResult.suggestions,
+        })
       });
 
     return NextResponse.json(

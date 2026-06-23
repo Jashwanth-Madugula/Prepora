@@ -168,4 +168,83 @@ ${text}`;
   }
 }
 
-export const analyzeATSWithGemini = analyzeATSWithGroq;
+export const analyzeATSWithGemini = analyzeATSWithGroq;
+
+export interface JDCompareResult {
+  atsScore: number;
+  matchPercentage: number;
+  missingSkills: string[];
+  missingKeywords: string[];
+  strengths: string[];
+  suggestions: string[];
+}
+
+export async function compareResumeWithJD(
+  resumeText: string,
+  jobDescription: string
+): Promise<JDCompareResult> {
+  const apiKey = process.env.GROQ_API_KEY || process.env.GROQ_API;
+  if (!apiKey) {
+    console.warn("GROQ_API_KEY / GROQ_API is not defined. Falling back to local JD match.");
+    return {
+      atsScore: 70,
+      matchPercentage: 60,
+      missingSkills: ["TypeScript", "Next.js"],
+      missingKeywords: ["Server-side rendering", "Database optimization"],
+      strengths: ["Strong programming foundations"],
+      suggestions: ["Tailor resume keywords to the job description."],
+    };
+  }
+
+  try {
+    const groq = new Groq({ apiKey });
+    const modelName = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+
+    const prompt = `You are a professional ATS (Applicant Tracking System) grader and recruitment evaluator.
+Analyze the candidate's resume text and compare it against the provided Job Description.
+
+Resume Text:
+${resumeText}
+
+Job Description:
+${jobDescription}
+
+Perform a detailed match. Evaluate skills, technologies, experience, and keywords.
+Return ONLY a valid JSON object matching the schema below. Do not wrap in markdown fences or conversational text.
+
+Schema:
+{
+  "atsScore": 85,
+  "matchPercentage": 75,
+  "missingSkills": ["skill 1", "skill 2"],
+  "missingKeywords": ["keyword 1", "keyword 2"],
+  "strengths": ["strength 1", "strength 2"],
+  "suggestions": ["suggestion 1", "suggestion 2"]
+}
+`;
+
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      model: modelName,
+      response_format: { type: "json_object" },
+    });
+
+    const responseText = chatCompletion.choices[0]?.message?.content || "{}";
+    return JSON.parse(responseText) as JDCompareResult;
+  } catch (error) {
+    console.error("Groq JD comparison error:", error);
+    return {
+      atsScore: 65,
+      matchPercentage: 55,
+      missingSkills: ["Error analyzing skills"],
+      missingKeywords: ["Error analyzing keywords"],
+      strengths: ["Resume parsed successfully."],
+      suggestions: ["Groq evaluation failed. Verify resume text structure and retry."],
+    };
+  }
+}

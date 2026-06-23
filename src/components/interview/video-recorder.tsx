@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Video, Square, Play, Pause, RotateCcw } from "lucide-react";
 
 interface VideoRecorderProps {
-  onRecordingComplete: (blob: Blob | null) => void;
+  onRecordingComplete: (blob: Blob | null, duration?: number) => void;
 }
 
 /**
@@ -38,6 +38,7 @@ export default function VideoRecorder({ onRecordingComplete }: VideoRecorderProp
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
   const videoPlayerRef = useRef<HTMLVideoElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingStartTimestampRef = useRef<number>(0);
 
   // Initialize camera preview stream on mount
   useEffect(() => {
@@ -99,8 +100,9 @@ export default function VideoRecorder({ onRecordingComplete }: VideoRecorderProp
   // Start recording the stream
   const startRecording = async () => {
     setVideoUrl(null);
-    onRecordingComplete(null);
+    onRecordingComplete(null, 0);
     setRecordingTime(0);
+    recordingStartTimestampRef.current = Date.now();
 
     // Make sure stream is running
     let activeStream = stream;
@@ -140,11 +142,12 @@ export default function VideoRecorder({ onRecordingComplete }: VideoRecorderProp
         };
 
         media.onstop = () => {
+          const duration = Math.round((Date.now() - recordingStartTimestampRef.current) / 1000);
           const videoBlob = new Blob(localChunks, { type: "video/webm" });
           const videoUrlData = URL.createObjectURL(videoBlob);
           setVideoUrl(videoUrlData);
           setRecordingStatus("stopped");
-          onRecordingComplete(videoBlob);
+          onRecordingComplete(videoBlob, duration);
           
           // Release original preview tracks so the camera green light goes off
           stopCameraStream();
@@ -172,7 +175,7 @@ export default function VideoRecorder({ onRecordingComplete }: VideoRecorderProp
     setRecordingStatus("idle");
     setRecordingTime(0);
     setIsPlaying(false);
-    onRecordingComplete(null);
+    onRecordingComplete(null, 0);
     startCameraPreview();
   };
 

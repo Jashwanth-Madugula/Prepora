@@ -13,7 +13,7 @@ import { generateCodingQuestion } from "@/services/coding.service";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { difficulty } = body;
+    const { difficulty, topic, company } = body;
 
     if (!difficulty) {
       return NextResponse.json(
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     await dbConnect();
 
     // Call Groq service to generate a standard question
-    const rawQuestion = await generateCodingQuestion(difficulty);
+    const rawQuestion = await generateCodingQuestion(difficulty, topic, company);
 
     // Save generated question into MongoDB
     const question = await CodingQuestion.create({

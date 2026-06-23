@@ -1,0 +1,61 @@
+================================================================================
+REHEARSA AI SYSTEM DOCUMENTATION: JOB DESCRIPTION ATS ANALYSIS MODULE
+================================================================================
+
+File Purpose:
+This module allows candidates to compare their parsed resumes against specific, 
+pasted-in Job Descriptions (JDs) to identify compatibility scores, missing keywords, 
+technical strengths, and formatting suggestions for optimized ATS pass-rates.
+
+--------------------------------------------------------------------------------
+1. DATABASE FIELDS & SCHEMA UPDATES
+--------------------------------------------------------------------------------
+File: src/models/Resume.ts
+
+The original `Resume` schema is extended with the following comparison fields:
+- `jdText`: String (The raw text of the pasted job description)
+- `jdMatchPercentage`: Number (Percentage of similarity score, 0 to 100)
+- `jdMissingSkills`: [String] (Key skills that are in the JD but not the resume)
+- `jdMissingKeywords`: [String] (Other keywords relevant to the JD that are missing)
+- `jdStrengths`: [String] (Areas where the candidate fits the JD well)
+- `jdSuggestions`: [String] (Actionable advice to improve resume compatibility)
+
+--------------------------------------------------------------------------------
+2. BACKEND COMPILER / EVALUATION API
+--------------------------------------------------------------------------------
+File: src/app/api/resumes/ats-compare/route.ts
+
+Method: POST
+Payload:
+{
+  "resumeId": "string",
+  "jobDescription": "string"
+}
+
+Workflow:
+1. Verifies current candidate session context using getCurrentUserId().
+2. Queries the Resume model to retrieve parsed resume content.
+3. Packages both the parsed resume contents and target job description text.
+4. Invokes the Groq Llama-3.3-70b-versatile engine with a structured prompt.
+5. Returns a structured JSON containing:
+   - atsScore: General formatting and layout score.
+   - matchPercentage: Direct overlap percentage with the target JD.
+   - missingSkills: Array of missing technologies or soft skills.
+   - missingKeywords: Array of general industry jargon/terms to include.
+   - strengths: Array of bullet points highlighting existing compliance.
+   - suggestions: Actionable resume text modifications.
+6. Saves these statistics to the target `Resume` database document for retrieval.
+
+--------------------------------------------------------------------------------
+3. USER INTERFACE & MODAL SYSTEM
+--------------------------------------------------------------------------------
+File: src/app/resumes/[id]/page.tsx
+File: src/components/resumes/ATSCompareModal.tsx
+
+Visual Elements:
+- Paste text-area for pasting the Job Description.
+- Animated, gradient-filled progress bars depicting "Match Strength".
+- High-contrast, dynamic badges detailing "Missing Keywords" (red) and "Matched Keywords" (green).
+- Clean, list-structured breakdown for "Actionable Recommendations" and "Technical Strengths".
+- Loading skeleton views and spinners to transition smoothly during Groq processing.
+================================================================================

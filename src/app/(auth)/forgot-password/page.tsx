@@ -2,8 +2,8 @@ import React from "react";
 import ForgotPasswordForm from "@/components/auth/ForgotPasswordForm";
 
 export const metadata = {
-  title: "Forgot Password - Prepora",
-  description: "Request a password reset link for your Prepora account",
+  title: "Forgot Password - Rehearsa AI",
+  description: "Request a password reset link for your Rehearsa AI account",
 };
 
 export default function ForgotPasswordPage() {

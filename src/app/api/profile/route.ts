@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
       fullName: user.fullName,
       username: user.username,
       email: user.email,
+      role: user.role,
     };
 
     return Response.json({ profile: mergedProfile }, { status: 200 });

@@ -1,0 +1,58 @@
+================================================================================
+REHEARSA AI SYSTEM DOCUMENTATION: APTITUDE PREPARATION WORKSPACE
+================================================================================
+
+File Purpose:
+This module helps candidates practice quantitative, logical reasoning, and verbal 
+aptitude tests to clear early-round screening exams. It supports adaptive difficulty 
+assessments and company-specific mocks.
+
+--------------------------------------------------------------------------------
+1. DATABASE MODELS & SCHEMA
+--------------------------------------------------------------------------------
+File: src/models/aptitude-test.model.ts
+- Represents the parent configuration of an aptitude practice exam.
+- Fields:
+  - userId: Reference to the candidate.
+  - title: Name of the test session (e.g. "TCS Quantitative Diagnostic").
+  - category: "quantitative" | "logical" | "verbal" | "mixed".
+  - difficulty: "easy" | "medium" | "hard" | "adaptive".
+  - company: Optional string (e.g., "TCS", "Accenture", "Infosys").
+  - totalQuestions: Number of questions (usually 10).
+  - duration: Duration in minutes (defaults to 30).
+  - status: "pending" | "in-progress" | "completed".
+  - score: Percentage score (0 to 100).
+  - completedAt: Date of completion.
+
+File: src/models/aptitude-attempt.model.ts
+- Represents a user's completed attempt session.
+- Fields:
+  - userId & testId.
+  - answers: [{ questionId, selectedAnswer, isCorrect }]
+  - score, totalQuestions, correctAnswers.
+  - category & difficulty (denormalized for high performance aggregations).
+  - submittedAt: Date.
+
+--------------------------------------------------------------------------------
+2. AI QUESTION GENERATOR ENGINE
+--------------------------------------------------------------------------------
+File: src/services/aptitude/aptitude-ai.service.ts
+File: src/services/aptitude/question-bank.ts
+
+Workflow:
+1. Receives request parameters: category, difficulty, totalQuestions, company, and exclude list.
+2. Checks if GROQ_API_KEY is configured. If not, falls back to local bank (question-bank.ts).
+3. Groq prompt instructions:
+   - Formulates questions matching typical corporate exams of target company if provided.
+   - Outputs JSON array of object questions, options, correctAnswer, and step-by-step solutions.
+   - Sanitizes output to filter markdown backticks before returning.
+
+--------------------------------------------------------------------------------
+3. USER INTERFACE & WORKSPACE FLOW
+--------------------------------------------------------------------------------
+File: src/app/dashboard/aptitude/page.tsx
+- Dashboard workspace configurator.
+- Select target category ("Quantitative", "Logical", "Verbal", "Mixed").
+- Select difficulty or choose company exam mocks (TCS NQT, Accenture, Infosys).
+- Display historical diagnostic summaries, accuracy gauges, and category indicators.
+================================================================================

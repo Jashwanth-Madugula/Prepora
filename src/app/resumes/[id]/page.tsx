@@ -19,8 +19,10 @@ import {
   Edit2,
   Target,
   Download,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   getResume,
@@ -37,6 +39,8 @@ export default function ResumeDetailsPage() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"ats" | "details" | "pdf">("ats");
+  const [jdInput, setJdInput] = useState("");
+  const [comparing, setComparing] = useState(false);
 
   async function loadResume() {
     try {
@@ -45,6 +49,7 @@ export default function ResumeDetailsPage() {
       if (data.success && data.resume) {
         setResume(data.resume);
         setTitle(data.resume.title);
+        setJdInput(data.resume.jdText || "");
       } else {
         router.push("/resumes");
       }
@@ -52,6 +57,33 @@ export default function ResumeDetailsPage() {
       console.error("Failed to load resume", error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleJDCompare() {
+    if (!jdInput.trim()) {
+      toast.error("Please enter a job description.");
+      return;
+    }
+    setComparing(true);
+    try {
+      const res = await fetch("/api/resumes/ats-compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeId: resume._id, jobDescription: jdInput }),
+      });
+      const data = await res.json();
+      if (data.success && data.resume) {
+        setResume(data.resume);
+        toast.success("Job description match analysis updated!");
+      } else {
+        toast.error(data.error || "Failed to compare resume.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to compare resume.");
+    } finally {
+      setComparing(false);
     }
   }
 
@@ -318,6 +350,37 @@ export default function ResumeDetailsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Job Description Matcher Card */}
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1 block">Job Match Analysis</span>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Compare your resume against a specific job description to find missing keywords and see your matching score.
+                  </p>
+                </div>
+                <textarea
+                  value={jdInput}
+                  onChange={(e) => setJdInput(e.target.value)}
+                  placeholder="Paste the job description here..."
+                  rows={6}
+                  className="w-full text-xs p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white resize-none text-zinc-800 dark:text-zinc-200"
+                />
+                <button
+                  onClick={handleJDCompare}
+                  disabled={comparing}
+                  className="w-full py-2.5 bg-black dark:bg-white text-white dark:text-black rounded-xl text-xs font-bold hover:opacity-90 transition duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {comparing ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Analyzing Match...
+                    </>
+                  ) : (
+                    "Run JD Comparison"
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Keyword and Suggestions Column */}
@@ -404,6 +467,104 @@ export default function ResumeDetailsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Job Match Report Card */}
+              {resume.jdText && (
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-6 shadow-sm flex flex-col gap-6">
+                  <div className="flex items-center justify-between border-b border-zinc-150 dark:border-zinc-800 pb-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                      <Target className="w-5 h-5 text-indigo-500" />
+                      Job Match Analysis Report
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-zinc-500 dark:text-zinc-455">Match Rate:</span>
+                      <span className={`text-lg font-black ${
+                        (resume.jdMatchPercentage || 0) >= 80 ? "text-emerald-500" :
+                        (resume.jdMatchPercentage || 0) >= 60 ? "text-amber-500" :
+                        (resume.jdMatchPercentage || 0) >= 40 ? "text-orange-500" : "text-red-500"
+                      }`}>
+                        {resume.jdMatchPercentage || 0}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Strengths */}
+                    <div className="flex flex-col gap-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4" /> Key Strengths for this JD
+                      </h4>
+                      {resume.jdStrengths && resume.jdStrengths.length > 0 ? (
+                        <ul className="space-y-2">
+                          {resume.jdStrengths.map((str: string, i: number) => (
+                            <li key={i} className="text-xs text-zinc-600 dark:text-zinc-300 bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-3 leading-relaxed font-medium">
+                              {str}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-zinc-400">No specific match strengths calculated.</p>
+                      )}
+                    </div>
+
+                    {/* Suggestions */}
+                    <div className="flex flex-col gap-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4" /> AI Match Recommendations
+                      </h4>
+                      {resume.jdSuggestions && resume.jdSuggestions.length > 0 ? (
+                        <ul className="space-y-2">
+                          {resume.jdSuggestions.map((sug: string, i: number) => (
+                            <li key={i} className="text-xs text-zinc-600 dark:text-zinc-300 bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 leading-relaxed font-medium">
+                              {sug}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-zinc-400">No suggestions needed.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-zinc-150 dark:border-zinc-800">
+                    {/* Missing Skills */}
+                    <div className="flex flex-col gap-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                        Missing Technical Skills
+                      </h4>
+                      {resume.jdMissingSkills && resume.jdMissingSkills.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {resume.jdMissingSkills.map((sk: string) => (
+                            <span key={sk} className="px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-400 text-xs font-semibold">
+                              {sk}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-550 dark:text-zinc-400">All required skills matched!</p>
+                      )}
+                    </div>
+
+                    {/* Missing Keywords */}
+                    <div className="flex flex-col gap-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">
+                        Missing Keywords
+                      </h4>
+                      {resume.jdMissingKeywords && resume.jdMissingKeywords.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {resume.jdMissingKeywords.map((kw: string) => (
+                            <span key={kw} className="px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-700 dark:text-orange-400 text-xs font-semibold">
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-550 dark:text-zinc-400">No missing keywords found.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
             </div>
           </div>

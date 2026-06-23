@@ -1,0 +1,49 @@
+================================================================================
+REHEARSA AI SYSTEM DOCUMENTATION: CANDIDATE DASHBOARD
+================================================================================
+
+File Purpose:
+The candidate dashboard acts as the primary hub of Rehearsa AI. It provides a visual, 
+glassmorphic console for quick navigation, performance summaries, active resume badges, 
+and workspace redirection.
+
+--------------------------------------------------------------------------------
+1. CODE STRUCTURE & LAYOUT
+--------------------------------------------------------------------------------
+File: src/app/dashboard/page.tsx
+
+Flow:
+1. Performs an initial check against `/api/profile` inside React.useEffect to verify 
+   if the candidate has completed their academic and career placement goals.
+   - Redirects to `/complete-profile` if status code is 404.
+   - Redirects to `/login` if status code is 401.
+2. Saves profile metadata (e.g. `role: user.role`) to state variables.
+3. Fetches platform-wide analytics from `/api/analytics` and hides the loader view.
+4. Renders a unified responsive layout.
+
+--------------------------------------------------------------------------------
+2. DASHBOARD NAVIGATION HEADER
+--------------------------------------------------------------------------------
+- Prepora logo and active tab labels.
+- Theme Toggle component (Light/Dark mode switcher).
+- Link list:
+  - DSA Topic Assessment
+  - Core Subjects
+  - Analytics
+  - Profile
+  - Admin Panel (Rendered dynamically if user's role is "ADMIN" or "SUPER_ADMIN")
+- Sign Out button (calls `/api/auth/logout` API to clear active cookies).
+
+--------------------------------------------------------------------------------
+3. QUICK WORKSPACE ACTION CARDS
+--------------------------------------------------------------------------------
+A 3-column responsive grid redirects users to practice areas:
+- Resume Manager & ATS: Upload resumes, parsed keywords, formatting.
+- AI Mock Interviews: Practice video/audio interviews, communication, fluency.
+- Topic-Wise DSA Assessments: Practice Arrays, Stack, DP topic-wise coding challenges.
+- Core Subjects Assessments: DBMS, OS, CN, OOPS MCQ quizzes.
+- Aptitude Prep Workspace: Math, reasoning, verbal mocks, and corporate tests.
+- AI Coding Rounds: Code runner workspace, Monaco Editor interface.
+- AI Career Analytics: View full performance tabs and action plans.
+- Placement Profile Dashboard: Target companies, academic status, CGPA.
+================================================================================

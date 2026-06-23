@@ -37,7 +37,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { answer, answerType, audioUrl, videoUrl, transcript } = body;
+    const { answer, answerType, audioUrl, videoUrl, transcript, duration } = body;
 
     const type = answerType || "text";
     const contentToEvaluate = type === "text" ? answer : transcript;
@@ -55,6 +55,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { success: false, message: "Question not found" },
         { status: 404 }
       );
+    }
+
+    // Speech analytics calculations
+    const wordCount = contentToEvaluate.trim() ? contentToEvaluate.trim().split(/\s+/).length : 0;
+    let speakingSpeed = 0;
+    if (duration && duration > 0) {
+      speakingSpeed = Math.round((wordCount / duration) * 60);
+    }
+
+    const fillerWords = ["um", "uh", "like", "basically", "actually", "literally", "you know", "i mean"];
+    let fillerWordCount = 0;
+    if (contentToEvaluate) {
+      const words = contentToEvaluate.toLowerCase();
+      fillerWords.forEach((word) => {
+        const regex = new RegExp(`\\b${word}\\b`, "g");
+        const matches = words.match(regex);
+        if (matches) {
+          fillerWordCount += matches.length;
+        }
+      });
     }
 
     // Call AI service to evaluate the response (transcribed speech or written text)
@@ -81,6 +101,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     question.strengths = result.strengths || [];
     question.weaknesses = result.weaknesses || [];
     question.improvedAnswer = result.improvedAnswer || "";
+
+    question.speakingSpeed = speakingSpeed;
+    question.fillerWordCount = fillerWordCount;
 
     await question.save();
 

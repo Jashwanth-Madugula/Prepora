@@ -59,7 +59,8 @@ export async function updateResume(
 
 export async function uploadResume(
   file: File,
-  title: string
+  title: string,
+  jobDescription?: string
 ) {
   const formData =
     new FormData();
@@ -73,6 +74,13 @@ export async function uploadResume(
     "title",
     title
   );
+
+  if (jobDescription) {
+    formData.append(
+      "jobDescription",
+      jobDescription
+    );
+  }
 
   const response =
     await fetch(

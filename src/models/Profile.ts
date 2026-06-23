@@ -19,6 +19,7 @@ export interface IProfile extends Document {
   phone?: string;
   location?: string;
   experienceLevel?: "student" | "fresher" | "experienced";
+  placementGoal?: "Product" | "Service" | "Startup";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -99,6 +100,11 @@ const ProfileSchema = new Schema<IProfile>(
       type: String,
       enum: ["student", "fresher", "experienced"],
       default: "student",
+    },
+    placementGoal: {
+      type: String,
+      enum: ["Product", "Service", "Startup"],
+      default: "Product",
     },
   },
   {

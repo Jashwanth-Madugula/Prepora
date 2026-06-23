@@ -18,6 +18,14 @@ export interface IUser extends Document {
   resetPasswordTokenExpiry?: Date;
 
   refreshToken?: string;
+  refreshTokens?: {
+    _id?: mongoose.Types.ObjectId;
+    tokenHash: string;
+    ipAddress?: string;
+    userAgent?: string;
+    createdAt: Date;
+    lastActive: Date;
+  }[];
 
   loginAttempts: number;
   lockUntil?: Date;
@@ -77,6 +85,16 @@ const UserSchema = new mongoose.Schema<IUser>(
     resetPasswordTokenExpiry: Date,
 
     refreshToken: String,
+
+    refreshTokens: [
+      {
+        tokenHash: { type: String, required: true },
+        ipAddress: String,
+        userAgent: String,
+        createdAt: { type: Date, default: Date.now },
+        lastActive: { type: Date, default: Date.now },
+      },
+    ],
 
     loginAttempts: {
       type: Number,

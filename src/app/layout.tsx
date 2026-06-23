@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Prepora - AI-Powered Interview Preparation",
-  description: "Accelerate your career preparation with AI-driven mock interviews, resume analysis, and coding tests.",
+  title: "Rehearsa AI - AI-Powered Placement Readiness Platform",
+  description: "Accelerate your career preparation with generative AI. Take coding assessments, aptitude workspace tests, resume analyses, and mock interviews.",
 };
 
 export default function RootLayout({

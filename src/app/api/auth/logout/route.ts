@@ -4,6 +4,7 @@ import { dbConnect } from "@/lib/db";
 import { User } from "@/models/User";
 import { verifyRefreshToken } from "@/lib/jwt";
 import { JWTPayload } from "@/types/auth";
+import { compareToken } from "@/lib/token-hash";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,9 +15,26 @@ export async function POST(req: NextRequest) {
     if (refreshToken) {
       const decoded = verifyRefreshToken<JWTPayload>(refreshToken);
       if (decoded) {
-        await User.findByIdAndUpdate(decoded.userId, {
-          $unset: { refreshToken: "" }
-        });
+        const user = await User.findById(decoded.userId);
+        if (user) {
+          if (user.refreshTokens && user.refreshTokens.length > 0) {
+            const remainingSessions = [];
+            for (const s of user.refreshTokens) {
+              const isMatch = await compareToken(refreshToken, s.tokenHash);
+              if (!isMatch) {
+                remainingSessions.push(s);
+              }
+            }
+            user.refreshTokens = remainingSessions;
+          }
+          if (user.refreshToken) {
+            const isMatchLegacy = await compareToken(refreshToken, user.refreshToken);
+            if (isMatchLegacy || user.refreshToken === refreshToken) {
+              user.refreshToken = undefined;
+            }
+          }
+          await user.save();
+        }
       }
     }
 

@@ -5,6 +5,7 @@ import { verifyRefreshToken, signAccessToken, signRefreshToken } from "@/lib/jwt
 import { cookies } from "next/headers";
 import { JWTPayload } from "@/types/auth";
 import { compareToken, hashToken, isHashed } from "@/lib/token-hash";
+import { getIpAddress } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,22 +37,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!user.refreshToken) {
-      return Response.json(
-        { message: "Invalid session or no active session found" },
-        { status: 401 }
-      );
+    // Find matching session in user.refreshTokens
+    let matchingSessionIndex = -1;
+    if (user.refreshTokens && user.refreshTokens.length > 0) {
+      for (let i = 0; i < user.refreshTokens.length; i++) {
+        const session = user.refreshTokens[i];
+        if (await compareToken(refreshToken, session.tokenHash)) {
+          matchingSessionIndex = i;
+          break;
+        }
+      }
     }
 
-    // Match refresh token (with support for legacy plain-text migration)
-    let isTokenMatch = false;
-    if (isHashed(user.refreshToken)) {
-      isTokenMatch = await compareToken(refreshToken, user.refreshToken);
-    } else {
-      isTokenMatch = user.refreshToken === refreshToken;
+    // Fallback: check legacy single refreshToken field
+    let isLegacyMatch = false;
+    if (matchingSessionIndex === -1 && user.refreshToken) {
+      if (isHashed(user.refreshToken)) {
+        isLegacyMatch = await compareToken(refreshToken, user.refreshToken);
+      } else {
+        isLegacyMatch = user.refreshToken === refreshToken;
+      }
     }
 
-    if (!isTokenMatch) {
+    if (matchingSessionIndex === -1 && !isLegacyMatch) {
       return Response.json(
         { message: "Invalid session or token reuse detected" },
         { status: 401 }
@@ -68,7 +76,30 @@ export async function POST(req: NextRequest) {
     );
 
     // Save hashed rotated refresh token to user document
-    user.refreshToken = await hashToken(newRefreshToken);
+    const newHashedToken = await hashToken(newRefreshToken);
+    user.refreshToken = newHashedToken;
+
+    const userAgent = req.headers.get("user-agent") || "Unknown Device";
+    const ip = getIpAddress(req);
+
+    if (matchingSessionIndex !== -1 && user.refreshTokens) {
+      user.refreshTokens[matchingSessionIndex].tokenHash = newHashedToken;
+      user.refreshTokens[matchingSessionIndex].lastActive = new Date();
+      user.refreshTokens[matchingSessionIndex].ipAddress = ip;
+      user.refreshTokens[matchingSessionIndex].userAgent = userAgent;
+    } else {
+      if (!user.refreshTokens) {
+        user.refreshTokens = [];
+      }
+      user.refreshTokens.push({
+        tokenHash: newHashedToken,
+        ipAddress: ip,
+        userAgent,
+        createdAt: new Date(),
+        lastActive: new Date(),
+      });
+    }
+
     await user.save();
 
     // Set cookies with rotated values

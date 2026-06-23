@@ -2,8 +2,8 @@ import React from "react";
 import LoginForm from "@/components/auth/LoginForm";
 
 export const metadata = {
-  title: "Sign In - Prepora",
-  description: "Sign in to your Prepora account",
+  title: "Sign In - Rehearsa AI",
+  description: "Sign in to your Rehearsa AI account",
 };
 
 export default function LoginPage() {

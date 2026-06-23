@@ -46,6 +46,10 @@ export interface IInterviewQuestion extends Document {
   weaknesses?: string[];
 
   followUps?: string[];
+
+  // Speech analytics fields
+  speakingSpeed?: number;
+  fillerWordCount?: number;
 }
 
 const InterviewQuestionSchema =
@@ -112,6 +116,10 @@ const InterviewQuestionSchema =
       weaknesses: [String],
 
       followUps: [String],
+
+      speakingSpeed: Number,
+
+      fillerWordCount: Number,
     },
     {
       timestamps: true,

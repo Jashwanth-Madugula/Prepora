@@ -1,0 +1,46 @@
+================================================================================
+REHEARSA AI SYSTEM DOCUMENTATION: TOPIC-WISE DSA ASSESSMENTS
+================================================================================
+
+File Purpose:
+This module allows candidates to practice data structures and algorithms (DSA) 
+questions organized by specific topics (e.g. Arrays, Trees, Graphs, Stack, DP) 
+and targeted at specific company interview standards.
+
+--------------------------------------------------------------------------------
+1. CODE COMPILING & CODING SERVICE EXTENSION
+--------------------------------------------------------------------------------
+File: src/services/coding.service.ts
+- Extends the `generateCodingQuestion` function to accept:
+  - `difficulty`: easy | medium | hard
+  - `topic`: Specific DSA topic name (e.g. "Arrays", "Linked Lists", "Graphs")
+  - `company`: Optional target company round patterns (e.g. "Amazon SDE Round")
+- Prompt changes: Instructs Groq Llama to generate questions, skeleton test cases, 
+  correct solutions, and optimal complexity limits tailored to the requested topic.
+
+--------------------------------------------------------------------------------
+2. DSA WORKSPACE APIS
+--------------------------------------------------------------------------------
+File: src/app/api/coding/generate/route.ts
+- Receives the payload:
+  {
+    "difficulty": "easy" | "medium" | "hard",
+    "topic": "Arrays" | "Trees" | ...,
+    "company": "Amazon" | ...
+  }
+- Passes parameters to `coding.service.ts` to output standard coding challenges.
+- Registers questions in the `CodingQuestion` collection.
+
+--------------------------------------------------------------------------------
+3. USER INTERFACE - TOPIC LANDING DASHBOARD
+--------------------------------------------------------------------------------
+File: src/app/dashboard/dsa/page.tsx
+- Provides a clean, premium visual cards layout for all primary DSA topics:
+  - Arrays, Strings, Linked Lists, Stack, Queue, Trees, BST, Heap, Graphs, Dynamic Programming.
+- Each topic card lists:
+  - Number of solved attempts.
+  - Average accuracy rating.
+  - Difficulty tags (Easy, Medium, Hard).
+- Quick launch buttons let candidates config a challenge and redirect immediately to the 
+  Interactive Coding Workspace editor (built using Monaco Editor) to write solutions.
+================================================================================

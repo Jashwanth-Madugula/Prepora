@@ -1,0 +1,56 @@
+================================================================================
+REHEARSA AI SYSTEM DOCUMENTATION: PLACEMENT READINESS SCORE ENGINE
+================================================================================
+
+File Purpose:
+The Placement Readiness Score is a unified, composite index representing a candidate's 
+overall preparedness for corporate placement exams and interviews. It aggregates five 
+distinct preparation domains using a weighted formula.
+
+--------------------------------------------------------------------------------
+1. WEIGHTING FORMULA CONFIGURATION
+--------------------------------------------------------------------------------
+The overall Placement Readiness Score is computed out of 100 as follows:
+
+Formula:
+  Readiness Score = Math.round(
+    (highestAtsScore * 0.15) +
+    (averageAptitudeScore * 0.15) +
+    (averageCodingScore * 0.40) +
+    (averageInterviewScore * 0.15) +
+    (averageSubjectScore * 0.15)
+  )
+
+Weights breakdown:
+1. Resume ATS Score (15%): Evaluates keywords, structure, and professional formatting.
+2. Aptitude Score (15%): Measures logical reasoning, verbal speed, and math competency.
+3. Coding/DSA (40%): Evaluates dynamic code runner scores, skeletons compilation, and DSA topic accuracy.
+4. Interview Score (15%): Gauges technical accuracy, confidence, and speech metrics.
+5. Core Subjects (15%): Assesses computer science theory basics (DBMS, OS, CN, OOPS).
+
+--------------------------------------------------------------------------------
+2. PLACEMENT CLASSIFICATIONS
+--------------------------------------------------------------------------------
+Depending on the final calculated score, candidates are classified into four status categories:
+- 0 to 39%: "Not Ready"
+  - Highlighted color: Red (#ef4444)
+  - Action plan focus: Fundamentals, core subjects, basic aptitude.
+- 40 to 59%: "Needs Improvement"
+  - Highlighted color: Orange (#f59e0b)
+  - Action plan focus: Easy coding, ATS resume keywords, and diagnostic aptitude.
+- 60 to 79%: "Interview Ready"
+  - Highlighted color: Indigo (#6366f1)
+  - Action plan focus: Speech delivery, STAR structure interviews, medium algorithms.
+- 80 to 100%: "Placement Ready"
+  - Highlighted color: Emerald (#10b981)
+  - Action plan focus: Edge cases, hard DSA topics, specific company mock challenges.
+
+--------------------------------------------------------------------------------
+3. DASHBOARD GAUGE PRESENTATION
+--------------------------------------------------------------------------------
+File: src/app/dashboard/page.tsx
+- Rendered in a prominent top-level hero section.
+- Uses a custom-drawn, animated SVG circle gauge that interpolates the color dynamically 
+  based on classification and transitions smoothy on dashboard render.
+- Displays adjacent progress lines and a list of top 3 AI Career Recommendations.
+================================================================================

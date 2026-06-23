@@ -1,0 +1,61 @@
+================================================================================
+REHEARSA AI SYSTEM DOCUMENTATION: PERFORMANCE ANALYTICS ENGINE
+================================================================================
+
+File Purpose:
+This engine aggregates a user's attempt history across all core modules (Resumes, 
+Mock Interviews, Aptitude Tests, Coding Attempts, and Core Subjects) to compute 
+dynamic metrics, category strength radars, and custom AI recommendations.
+
+--------------------------------------------------------------------------------
+1. ANALYTICS API SERVICE
+--------------------------------------------------------------------------------
+File: src/app/api/analytics/route.ts
+
+Method: GET
+Returns detailed stats on:
+- resume:
+  - totalResumes (count)
+  - highestAtsScore (max rating)
+  - averageAtsScore (average)
+  - latestResumeTitle
+  - missingKeywords & matchedKeywords (from the active parsed resume)
+- interviews:
+  - totalInterviews (count of completed)
+  - averageInterviewScore (average)
+  - metrics breakdown: technicalAccuracy, communication, confidence, completeness, 
+    structure, clarity, fluency (averages from InterviewQuestion questions)
+- aptitude:
+  - totalAptitudeTests (count)
+  - averageAptitudeScore (average accuracy)
+  - categoryAccuracy: quantitative, logical, verbal, mixed
+- coding:
+  - totalCodingAttempts
+  - averageCodingScore
+  - topics breakdown: topic name and computed accuracy rate
+- subjects:
+  - totalSubjectAttempts
+  - averageSubjectScore
+  - breakdown: DBMS, OS, CN, OOPS accuracy rates
+
+--------------------------------------------------------------------------------
+2. AI CROSS-MODULE CAREER RECOMMENDATIONS LOGIC
+--------------------------------------------------------------------------------
+Based on performance stats, the engine generates actionable recommendations:
+- Resume checks: If no resume exists, prompts upload. If score < 70%, lists top missing keywords.
+- Interview checks: Identifies the weakest evaluated metric among the 7 dimensions and 
+  suggests specific mock interview focuses.
+- Aptitude checks: Flags categories below 70% accuracy and advises targeted practice.
+- Coding checks: Recommends practicing easy/medium algorithms if average coding score < 70%.
+- Core subjects: Identifies weakest computer science subjects and links to practice quiz.
+- Cross-module balance advice: Detects if communication is low while aptitude is high (or vice-versa), 
+  and guides the user to practice interviews or diagnostic aptitude tests accordingly.
+
+--------------------------------------------------------------------------------
+3. USER INTERFACE LANDING VIEW
+--------------------------------------------------------------------------------
+File: src/app/dashboard/analytics/page.tsx
+- Animated tab selectors: Overview, AI Mock Interviews, Aptitude Tests, Resume ATS Match, AI Action Plan.
+- Premium circular SVG progress gauges.
+- High-contrast color-coded bullet indicators.
+================================================================================

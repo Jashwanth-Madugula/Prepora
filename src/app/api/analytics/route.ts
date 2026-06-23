@@ -5,6 +5,10 @@ import { Resume } from "@/models/Resume";
 import Interview from "@/models/interview.model";
 import InterviewQuestion from "@/models/interview-question.model";
 import AptitudeAttempt from "@/models/aptitude-attempt.model";
+import CodingAttempt from "@/models/coding-attempt.model";
+import CodingQuestion from "@/models/coding-question.model";
+import SubjectAttempt from "@/models/subject-attempt.model";
+import CodingRoundAttempt from "@/models/coding-round-attempt.model";
 
 /**
  * File Purpose:
@@ -18,6 +22,9 @@ import AptitudeAttempt from "@/models/aptitude-attempt.model";
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
+
+    // Ensure mongoose models are registered to avoid MissingSchemaError during populates
+    const _models = [CodingQuestion, CodingAttempt, CodingRoundAttempt, SubjectAttempt];
 
     // Authenticate the user.
     const userId = await getCurrentUserId();
@@ -164,6 +171,111 @@ export async function GET(req: NextRequest) {
     }
 
     // ==========================================
+    // 3.5 CODING / DSA ROUNDS ANALYTICS
+    // ==========================================
+    const codingAttempts = await CodingAttempt.find({ userId, status: "submitted" })
+      .populate("questionId");
+    const codingRoundAttempts = await CodingRoundAttempt.find({ userId, status: "submitted" })
+      .populate("questions.questionId");
+
+    const totalCodingAttempts = codingAttempts.length;
+    const totalCodingRounds = codingRoundAttempts.length;
+    let averageCodingScore = 0;
+    const dsaTopicAccuracy: Record<string, { sum: number; count: number }> = {};
+
+    let totalAttemptsCount = totalCodingAttempts + (totalCodingRounds * 3);
+    let codingScoreSum = 0;
+
+    codingAttempts.forEach((a) => {
+      codingScoreSum += a.score || 0;
+      if (a.questionId) {
+        const topic = a.questionId.topic || "General";
+        if (!dsaTopicAccuracy[topic]) {
+          dsaTopicAccuracy[topic] = { sum: 0, count: 0 };
+        }
+        dsaTopicAccuracy[topic].sum += a.score || 0;
+        dsaTopicAccuracy[topic].count += 1;
+      }
+    });
+
+    codingRoundAttempts.forEach((r: any) => {
+      r.questions.forEach((q: any) => {
+        codingScoreSum += q.score || 0;
+        if (q.questionId) {
+          const topic = q.questionId.topic || "General";
+          if (!dsaTopicAccuracy[topic]) {
+            dsaTopicAccuracy[topic] = { sum: 0, count: 0 };
+          }
+          dsaTopicAccuracy[topic].sum += q.score || 0;
+          dsaTopicAccuracy[topic].count += 1;
+        }
+      });
+    });
+
+    if (totalAttemptsCount > 0) {
+      averageCodingScore = Math.round(codingScoreSum / totalAttemptsCount);
+    }
+
+    const dsaTopicsBreakdown = Object.entries(dsaTopicAccuracy).map(([topic, data]) => ({
+      topic,
+      accuracy: Math.round(data.sum / data.count),
+      count: data.count,
+    }));
+
+    // ==========================================
+    // 3.6 CORE SUBJECTS ANALYTICS
+    // ==========================================
+    const subjectAttempts = await SubjectAttempt.find({ userId, status: "completed" });
+    const totalSubjectAttempts = subjectAttempts.length;
+    let averageSubjectScore = 0;
+    const subjectAccuracy: Record<string, { sum: number; count: number }> = {
+      DBMS: { sum: 0, count: 0 },
+      OS: { sum: 0, count: 0 },
+      CN: { sum: 0, count: 0 },
+      OOPS: { sum: 0, count: 0 },
+    };
+
+    if (totalSubjectAttempts > 0) {
+      let subjectScoreSum = 0;
+      subjectAttempts.forEach((a) => {
+        subjectScoreSum += a.score || 0;
+        const subj = a.subject;
+        if (subjectAccuracy[subj]) {
+          subjectAccuracy[subj].sum += a.score || 0;
+          subjectAccuracy[subj].count += 1;
+        }
+      });
+      averageSubjectScore = Math.round(subjectScoreSum / totalSubjectAttempts);
+    }
+
+    const subjectBreakdown = Object.entries(subjectAccuracy).map(([subj, data]) => ({
+      subject: subj,
+      accuracy: data.count > 0 ? Math.round(data.sum / data.count) : 0,
+      count: data.count,
+    }));
+
+    // ==========================================
+    // PLACEMENT READINESS SCORE CALCULATION
+    // ==========================================
+    // Resume: 15%, Aptitude: 15%, Coding/DSA: 40%, Interviews: 15%, Core Subjects: 15%
+    const readinessScore = Math.round(
+      (highestAtsScore * 0.15) +
+      (averageAptitudeScore * 0.15) +
+      (averageCodingScore * 0.40) +
+      (averageInterviewScore * 0.15) +
+      (averageSubjectScore * 0.15)
+    );
+
+    let readinessClassification: "Not Ready" | "Needs Improvement" | "Interview Ready" | "Placement Ready" = "Not Ready";
+    if (readinessScore >= 80) {
+      readinessClassification = "Placement Ready";
+    } else if (readinessScore >= 60) {
+      readinessClassification = "Interview Ready";
+    } else if (readinessScore >= 40) {
+      readinessClassification = "Needs Improvement";
+    }
+
+    // ==========================================
     // 4. CROSS-MODULE AI CAREER PLAN
     // ==========================================
     const recommendations: string[] = [];
@@ -218,6 +330,23 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Coding suggestions
+    if (totalCodingAttempts === 0) {
+      recommendations.push("Launch your first AI Coding Round or Topic-Wise DSA practice to evaluate your programming capabilities.");
+    } else if (averageCodingScore < 70) {
+      recommendations.push(`Your average AI coding score is low (${averageCodingScore}%). Practice easy and medium DSA topics like Arrays and Strings to build logic.`);
+    }
+
+    // Core Subjects suggestions
+    if (totalSubjectAttempts === 0) {
+      recommendations.push("Attempt a Core Subject assessment quiz in DBMS, OS, Networks, or OOPS to gauge your computer science basics.");
+    } else {
+      const weakSubject = subjectBreakdown.sort((a, b) => a.accuracy - b.accuracy)[0];
+      if (weakSubject && weakSubject.accuracy < 70) {
+        recommendations.push(`Your accuracy in '${weakSubject.subject}' is currently '${weakSubject.accuracy}%'. Practice specific quizzes on this subject.`);
+      }
+    }
+
     // Cross-module balance advice
     if (totalInterviews > 0 && totalAptitudeTests > 0) {
       if (interviewMetrics.technicalAccuracy > 80 && averageAptitudeScore < 75) {
@@ -238,6 +367,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      readiness: {
+        score: readinessScore,
+        classification: readinessClassification,
+      },
       resume: {
         totalResumes,
         highestAtsScore,
@@ -256,6 +389,16 @@ export async function GET(req: NextRequest) {
         totalAptitudeTests,
         averageAptitudeScore,
         categoryAccuracy: aptitudeCategoryAccuracy,
+      },
+      coding: {
+        totalCodingAttempts,
+        averageCodingScore,
+        topics: dsaTopicsBreakdown,
+      },
+      subjects: {
+        totalSubjectAttempts,
+        averageSubjectScore,
+        breakdown: subjectBreakdown,
       },
       recommendations,
     });

@@ -139,7 +139,7 @@ export default function InterviewsDashboardPage() {
               href="/dashboard"
               className="font-bold text-lg tracking-tight bg-gradient-to-r from-black to-zinc-600 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent hover:opacity-80 transition duration-150"
             >
-              Prepora
+              Rehearsa AI
             </Link>
             <span className="text-zinc-300 dark:text-zinc-700">/</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
@@ -271,6 +271,13 @@ export default function InterviewsDashboardPage() {
                           "Java",
                           "Python",
                           "Data Science",
+                          "DevOps & Cloud",
+                          "System Design",
+                          "TCS Technical Round",
+                          "Infosys Technical Round",
+                          "Accenture Technical Round",
+                          "Amazon SDE Round",
+                          "Google SDE Round",
                         ].map((r) => (
                           <option key={r} value={r}>
                             {r}

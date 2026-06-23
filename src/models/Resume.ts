@@ -63,6 +63,20 @@ export interface IResume
   createdAt: Date;
 
   updatedAt: Date;
+
+  atsScore?: number;
+  atsSuggestions?: string[];
+  atsKeywordsMatched?: string[];
+  atsKeywordsMissing?: string[];
+  atsKeywordDensity?: string;
+  atsAnalyzedAt?: Date;
+
+  jdText?: string;
+  jdMatchPercentage?: number;
+  jdMissingSkills?: string[];
+  jdMissingKeywords?: string[];
+  jdStrengths?: string[];
+  jdSuggestions?: string[];
 }
 
 
@@ -203,6 +217,13 @@ const ParsedDataSchema =
       },
 
       atsAnalyzedAt: Date,
+
+      jdText: String,
+      jdMatchPercentage: { type: Number, default: 0 },
+      jdMissingSkills: { type: [String], default: [] },
+      jdMissingKeywords: { type: [String], default: [] },
+      jdStrengths: { type: [String], default: [] },
+      jdSuggestions: { type: [String], default: [] },
     },
     {
       timestamps: true,

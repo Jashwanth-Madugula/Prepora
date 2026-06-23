@@ -1,0 +1,69 @@
+================================================================================
+REHEARSA AI SYSTEM DOCUMENTATION: CORE SUBJECT MCQ ASSESSMENT MODULE
+================================================================================
+
+File Purpose:
+This module verifies candidates' knowledge of Computer Science Core Subjects (DBMS, 
+Operating Systems, Computer Networks, and OOPS) through simulated 10-MCQ quizzes 
+with timers and solutions breakdowns.
+
+--------------------------------------------------------------------------------
+1. DATABASE MODEL SCHEMA
+--------------------------------------------------------------------------------
+File: src/models/subject-attempt.model.ts
+
+Represents a mock subject quiz session.
+- userId: Reference to the User.
+- subject: "DBMS" | "OS" | "CN" | "OOPS".
+- difficulty: "easy" | "medium" | "hard".
+- totalQuestions: Total questions generated (defaults to 10).
+- correctAnswers: Count of correctly answered questions.
+- score: Percentage score (0 to 100).
+- status: "in-progress" | "completed".
+- questions: Array of objects containing:
+  - question: String (Text description of question)
+  - options: [String] (4 multiple-choice text answers)
+  - correctAnswer: String (Hashed or original target)
+  - explanation: String (Step-by-step description of solution)
+- answers: Array of candidate's selections matching the index of questions.
+- submittedAt: Date.
+
+--------------------------------------------------------------------------------
+2. AI QUESTION GENERATOR SERVICE
+--------------------------------------------------------------------------------
+File: src/services/subject-ai.service.ts
+- Calls Groq Llama model with instruction prompts:
+  - Generates 10 high-quality multiple choice questions matching target difficulty and subject.
+  - Returns raw JSON array parsed server-side.
+  - Safe fallback defaults are triggered if LLM times out or keys are missing.
+
+--------------------------------------------------------------------------------
+3. API ROUTES & ANTI-CHEATING PROTECTION
+--------------------------------------------------------------------------------
+File: src/app/api/subjects/create/route.ts
+- Initializes the quiz session, requests questions from `subject-ai.service.ts`, and 
+  saves the attempt in-progress.
+
+File: src/app/api/subjects/[id]/route.ts
+- Retrieves the quiz state.
+- ANTI-CHEATING PROTECTION: If attempt `status === "in-progress"`, correct answers and 
+  explanations are filtered out server-side. This prevents candidate source inspection 
+  using browser developer tools.
+
+File: src/app/api/subjects/[id]/submit/route.ts
+- Compares candidate selected answers against DB correct options, calculates the score 
+  and correctness flags, and marks the status as "completed".
+
+--------------------------------------------------------------------------------
+4. INTERACTIVE QUIZ PLAYER UI
+--------------------------------------------------------------------------------
+File: src/app/dashboard/subjects/page.tsx (Landing Selector)
+File: src/app/dashboard/subjects/[id]/page.tsx (Quiz Screen)
+
+Key Features:
+- 20-minute countdown timer. Automatically submits when it reaches 0.
+- Interactive question navigation grid.
+- Dynamic selection cards with hover animations.
+- Detailed solution modal rendered after completion listing correct answers, selected choices, 
+  and comprehensive AI explanations.
+================================================================================

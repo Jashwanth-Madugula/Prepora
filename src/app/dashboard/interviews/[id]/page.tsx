@@ -54,6 +54,7 @@ export default function ActiveInterviewPage() {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [loadingTextIndex, setLoadingTextIndex] = useState(0);
   const [evaluation, setEvaluation] = useState<any>(null);
+  const [recordedDuration, setRecordedDuration] = useState<number>(0);
 
   // Response mode and media blobs states
   const [responseMode, setResponseMode] = useState<"text" | "audio" | "video">("text");
@@ -116,6 +117,7 @@ export default function ActiveInterviewPage() {
     const activeQuestion = questions[current];
     let payload: any = {
       answerType: responseMode,
+      duration: responseMode === "text" ? 0 : recordedDuration,
     };
 
     setIsEvaluating(true);
@@ -233,6 +235,8 @@ export default function ActiveInterviewPage() {
           strengths: data.evaluation.strengths,
           weaknesses: data.evaluation.weaknesses,
           improvedAnswer: data.evaluation.improvedAnswer,
+          speakingSpeed: data.question?.speakingSpeed || 0,
+          fillerWordCount: data.question?.fillerWordCount || 0,
         };
         setQuestions(updatedQuestions);
         setEvaluation(data.evaluation);
@@ -281,6 +285,7 @@ export default function ActiveInterviewPage() {
     setAnswer("");
     setRecordedAudioBlob(null);
     setRecordedVideoBlob(null);
+    setRecordedDuration(0);
     setEvaluation(null);
     if (current < questions.length - 1) {
       setCurrent(current + 1);
@@ -334,7 +339,7 @@ export default function ActiveInterviewPage() {
           <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Link href="/dashboard" className="font-bold text-lg hover:opacity-85">
-                Prepora
+                Rehearsa AI
               </Link>
               <span className="text-zinc-300 dark:text-zinc-700">/</span>
               <Link
@@ -562,6 +567,20 @@ export default function ActiveInterviewPage() {
                           ))}
                         </div>
 
+                        {/* Spoken metrics details on summary view */}
+                        {q.answerType !== "text" && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-50/50 dark:bg-zinc-950/10 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-450 dark:text-zinc-400 font-semibold">Speaking Pace</span>
+                              <p className="text-sm font-extrabold mt-0.5 text-zinc-800 dark:text-zinc-200">{q.speakingSpeed || 0} Words / Min</p>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-455 dark:text-zinc-400 font-semibold">Filler Occurrences</span>
+                              <p className="text-sm font-extrabold mt-0.5 text-amber-600 dark:text-amber-450">{q.fillerWordCount || 0} words used</p>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Strengths & Weaknesses */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="p-4 rounded-xl border border-emerald-250 bg-emerald-50/10 dark:border-emerald-900/30 dark:bg-emerald-950/10 space-y-2">
@@ -647,7 +666,7 @@ export default function ActiveInterviewPage() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="font-bold text-lg hover:opacity-85">
-              Prepora
+              Rehearsa AI
             </Link>
             <span className="text-zinc-300 dark:text-zinc-700">/</span>
             <Link
@@ -816,13 +835,19 @@ export default function ActiveInterviewPage() {
 
                 {responseMode === "audio" && (
                   <div className="py-2">
-                    <AudioRecorder onRecordingComplete={(blob) => setRecordedAudioBlob(blob)} />
+                    <AudioRecorder onRecordingComplete={(blob, duration) => {
+                      setRecordedAudioBlob(blob);
+                      if (duration) setRecordedDuration(duration);
+                    }} />
                   </div>
                 )}
 
                 {responseMode === "video" && (
                   <div className="py-2">
-                    <VideoRecorder onRecordingComplete={(blob) => setRecordedVideoBlob(blob)} />
+                    <VideoRecorder onRecordingComplete={(blob, duration) => {
+                      setRecordedVideoBlob(blob);
+                      if (duration) setRecordedDuration(duration);
+                    }} />
                   </div>
                 )}
 
@@ -969,6 +994,30 @@ export default function ActiveInterviewPage() {
                           ))}
                         </div>
                       </div>
+
+                      {/* Speech Analytics details */}
+                      {data.answerType !== "text" && (
+                        <div className="grid grid-cols-2 gap-4 border-t border-zinc-150 dark:border-zinc-800 pt-4">
+                          <div className="p-4 rounded-xl border border-zinc-150 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-455">Speaking Speed</span>
+                            <div className="text-lg font-black mt-1 text-zinc-850 dark:text-zinc-100">{data.speakingSpeed || 0} WPM</div>
+                            <span className="text-[10px] text-zinc-400 block mt-1">
+                              {(data.speakingSpeed || 0) >= 110 && (data.speakingSpeed || 0) <= 150
+                                ? "Optimal conversational speed (110-150 WPM)."
+                                : "Try to aim for a steady 110-150 WPM cadence."}
+                            </span>
+                          </div>
+                          <div className="p-4 rounded-xl border border-zinc-150 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-455">Filler Words Count</span>
+                            <div className="text-lg font-black mt-1 text-amber-600 dark:text-amber-450">{data.fillerWordCount || 0} fillers used</div>
+                            <span className="text-[10px] text-zinc-400 block mt-1">
+                              {(data.fillerWordCount || 0) <= 3
+                                ? "Excellent control! Very low filler word usage."
+                                : "Try to pause silently instead of using fillers."}
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Strengths & Weaknesses list */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-zinc-100 dark:border-zinc-850 pt-6">

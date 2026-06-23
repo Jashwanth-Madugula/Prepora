@@ -1,0 +1,47 @@
+================================================================================
+REHEARSA AI SYSTEM DOCUMENTATION: ADMINISTRATOR DIAGNOSTIC CONSOLE
+================================================================================
+
+File Purpose:
+The Admin Diagnostic Console provides platform administrators with aggregated insights 
+into candidate registration counts, active devices sessions, engine latency, and 
+AI token usage volumes.
+
+--------------------------------------------------------------------------------
+1. SECURITY & ACCESS CONTROL FLOW
+--------------------------------------------------------------------------------
+- Client-Side Guard: The Admin page at `/dashboard/admin` requests `/api/admin` dynamically. 
+  If the API returns a status code of 403 or 401, the client displays a restricted-access 
+  warning modal ("Access Restricted") preventing unauthorized browsing.
+- Server-Side Guard: The API handler calls `getCurrentUser()` to extract user details from 
+  the verification token. It enforces the constraint:
+  `if (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") return 403;`
+
+--------------------------------------------------------------------------------
+2. BACKEND STATISTICAL AGGREGATIONS
+--------------------------------------------------------------------------------
+File: src/app/api/admin/route.ts
+- User Counts: `User.countDocuments({ isDeleted: false })`.
+- Active Device Sessions: Counts the aggregate size of all `refreshTokens` arrays across 
+  all user profiles in Mongoose using MongoDB aggregate arrays sizing functions.
+- Average Placement Readiness Score: Queries the highest ATS score, average aptitude score, 
+  average coding score, average interview score, and average subject score for all active users 
+  using aggregations grouped by userId. In memory, it applies the weight ratios to calculate 
+  each user's readiness score and computes a true global average.
+- AI API Calls Estimation:
+  - Whisper: Count of `InterviewQuestion` documents containing transcripts.
+  - Llama Evaluations: Count of questions with completed feedback text.
+  - Llama generations, resume parses, subject quizzes, and coding rounds are summed dynamically.
+
+--------------------------------------------------------------------------------
+3. ADMIN INTERFACE LAYOUT
+--------------------------------------------------------------------------------
+File: src/app/dashboard/admin/page.tsx
+- Glassmorphic counters for User Count, Live sessions, Average Readiness, and Assessed users.
+- Live blending color indicators (e.g. blinking green signal for active sessions).
+- Section Toggles:
+  - Overview & AI Usage: Visual horizontal bar chart detailing token consumption share.
+  - Granular API Count Details: Ledger table checking transaction counts for Whisper and Llama.
+  - System Diagnostics & Logs: Terminal window rendering mock diagnostic checkups and server platform stats (Node.js version, platform OS, uptime, and database latency).
+- Reload and refresh actions with automated loader spinners.
+================================================================================

@@ -13,7 +13,7 @@ const isEmailJSConfigured = !!(EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAI
 const isSmtpConfigured = !!(SMTP_USER && SMTP_PASS);
 
 if (!isEmailJSConfigured && !isSmtpConfigured) {
-  throw new Error("Prepora mail setup failed: Neither EmailJS nor SMTP credentials are fully configured.");
+  throw new Error("Rehearsa AI mail setup failed: Neither EmailJS nor SMTP credentials are fully configured.");
 }
 
 // Dynamically determine host and port based on SMTP user configuration
@@ -89,7 +89,7 @@ export async function sendVerificationEmail(email: string, token: string) {
       to_email: email,
       template_params: {
         subject: "Verify your email address",
-        title: "Welcome to Prepora!",
+        title: "Welcome to Rehearsa AI!",
         description: "Thank you for registering. Please verify your email address by clicking the button below:",
         action_url: verifyUrl,
         action_text: "Verify Email",
@@ -103,7 +103,7 @@ export async function sendVerificationEmail(email: string, token: string) {
     subject: "Verify your email address",
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
-        <h2>Welcome to Prepora!</h2>
+        <h2>Welcome to Rehearsa AI!</h2>
         <p>Thank you for registering. Please verify your email address by clicking the button below:</p>
         <div style="margin: 30px 0;">
           <a href="${verifyUrl}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Verify Email</a>

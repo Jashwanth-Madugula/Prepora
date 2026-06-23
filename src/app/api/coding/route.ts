@@ -5,11 +5,12 @@ import { verifyAccessToken } from "@/lib/jwt";
 import { JWTPayload } from "@/types/auth";
 import CodingAttempt from "@/models/coding-attempt.model";
 import CodingQuestion from "@/models/coding-question.model";
+import CodingRoundAttempt from "@/models/coding-round-attempt.model";
 
 /**
  * File Purpose:
  * This API endpoint handles GET requests to retrieve the history of coding attempts
- * for the authenticated user, populated with their associated question titles and details.
+ * and full 3-question coding rounds for the authenticated user.
  */
 
 async function getAuthUser() {
@@ -22,20 +23,27 @@ async function getAuthUser() {
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
+    const _models = [CodingQuestion, CodingRoundAttempt];
 
     const payload = await getAuthUser();
     if (!payload) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    // Find attempts for this user and populate the questionId details
+    // Find single-question attempts
     const attempts = await CodingAttempt.find({ userId: payload.userId })
       .populate("questionId", "title difficulty topic timeLimit")
+      .sort({ createdAt: -1 });
+
+    // Find 3-question round attempts
+    const roundAttempts = await CodingRoundAttempt.find({ userId: payload.userId })
+      .populate("questions.questionId", "title difficulty topic")
       .sort({ createdAt: -1 });
 
     return NextResponse.json({
       success: true,
       attempts,
+      roundAttempts,
     });
   } catch (error: any) {
     console.error("GET coding attempts history error:", error);

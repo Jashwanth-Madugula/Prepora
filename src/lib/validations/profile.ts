@@ -38,6 +38,7 @@ export const profileSchema = z.object({
   phone: z.string().optional().or(z.literal("")),
   location: z.string().optional().or(z.literal("")),
   experienceLevel: z.enum(["student", "fresher", "experienced"]).optional(),
+  placementGoal: z.enum(["Product", "Service", "Startup"]).optional(),
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;
