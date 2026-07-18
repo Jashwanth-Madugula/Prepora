@@ -1,3 +1,18 @@
+/**
+ * @file src/services/aptitude/aptitude-ai.service.ts
+ * @category Business Logic Service
+ *
+ * Why this code exists:
+ * Implements core business operations and logic handlers for "aptitude-ai.service.ts".
+ * - Specifically handles aptitude tests logic, database operations, or the dynamic difficulty adaptive testing algorithms.
+ *
+ * What problem it solves:
+ * - Decouples computation-heavy, algorithmic, or external API-dependent operations from HTTP controllers (Next.js route handlers) to ensure clean separation of concerns and high testability.
+ *
+ * How it works internally:
+ * - Exposes async methods and utilities that process input datasets, interface with Mongoose models, and communicate with external services (like Groq, Cloudinary, or Judge0 compilers).
+ */
+
 import Groq from "groq-sdk";
 import { fallbackQuestions, MockQuestion } from "./question-bank";
 

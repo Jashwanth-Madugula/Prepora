@@ -1,5 +1,21 @@
 "use client";
 
+
+/**
+ * @file src/context/AuthContext.tsx
+ * @category React State Context Provider
+ *
+ * Why this code exists:
+ * Provides global context-bound state management for the application.
+ * 
+ *
+ * What problem it solves:
+ * - Prevents prop-drilling by sharing authentication credentials, configuration settings, or view parameters globally across the component tree.
+ *
+ * How it works internally:
+ * - Declares a React Context object, renders its Provider wrapper around children components, and defines custom React hooks (such as useAuth) to fetch and mutate states.
+ */
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 

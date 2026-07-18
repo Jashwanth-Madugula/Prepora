@@ -1,3 +1,18 @@
+/**
+ * @file src/services/code-runner.service.ts
+ * @category Business Logic Service
+ *
+ * Why this code exists:
+ * Implements core business operations and logic handlers for "code-runner.service.ts".
+ * - Specifically handles compilation, remote sandbox code execution, code editor configuration, and automated AI reviews.
+ *
+ * What problem it solves:
+ * - Decouples computation-heavy, algorithmic, or external API-dependent operations from HTTP controllers (Next.js route handlers) to ensure clean separation of concerns and high testability.
+ *
+ * How it works internally:
+ * - Exposes async methods and utilities that process input datasets, interface with Mongoose models, and communicate with external services (like Groq, Cloudinary, or Judge0 compilers).
+ */
+
 import Groq from "groq-sdk";
 
 /**
@@ -8,10 +23,15 @@ import Groq from "groq-sdk";
  * stdout, and stderr formats.
  */
 
+// Initialize Groq API client with API Key check
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY!,
 });
 
+/**
+ * Runs user code via simulated LLM compilation and tracing.
+ * Receives code, programming language, inputs, target expected outputs, and details.
+ */
 export async function runCode(
   language: string,
   code: string,
@@ -19,6 +39,7 @@ export async function runCode(
   expectedOutput?: string,
   questionDescription?: string
 ) {
+  // Craft compile trace prompt detailing the context and input specifications
   const prompt = `
 You are an advanced sandboxed AI compiler and code execution runner.
 Your task is to trace and simulate the execution of the user-provided code for the given stdin input.
@@ -51,6 +72,8 @@ Return ONLY a valid JSON object matching the following structure. Do not include
 }
 `;
 
+  // Submit trace call to Groq model. 
+  // We use temperature = 0.1 to get the most deterministic output possible.
   const result = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     messages: [
@@ -59,7 +82,7 @@ Return ONLY a valid JSON object matching the following structure. Do not include
         content: prompt,
       },
     ],
-    temperature: 0.1, // low temperature for precise code execution tracing
+    temperature: 0.1, // Low temperature for precise code execution tracing
   });
 
   const text = result.choices[0].message.content || "";
@@ -68,7 +91,7 @@ Return ONLY a valid JSON object matching the following structure. Do not include
     let parsed: any = null;
     let found = false;
 
-    // First try standard codeblock matches
+    // First try standard codeblock matches: check if response has ```json ... ``` tags
     const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
     if (codeBlockMatch && codeBlockMatch[1]) {
       try {
@@ -77,8 +100,8 @@ Return ONLY a valid JSON object matching the following structure. Do not include
       } catch (_) {}
     }
 
+    // Fallback: Scan backward for a '{' that starts a valid JSON block if markdown regex failed
     if (!found) {
-      // Scan backward for a '{' that starts a valid JSON block
       for (let i = text.length - 1; i >= 0; i--) {
         if (text[i] === "{") {
           const candidate = text.substring(i);
@@ -99,6 +122,7 @@ Return ONLY a valid JSON object matching the following structure. Do not include
       throw new Error("Could not find a valid JSON object in Groq response.");
     }
 
+    // Determine error flags based on simulated exitCode and stderr text
     const isError = parsed.exitCode !== 0 || !!parsed.stderr;
 
     return {
@@ -112,6 +136,7 @@ Return ONLY a valid JSON object matching the following structure. Do not include
       samplePassed: !!parsed.samplePassed,
     };
   } catch (error) {
+    // Log errors and return standardized compile/execution failures
     console.error("JSON parsing error of Groq simulation response:", error, "\nRaw Response was:", text);
     return {
       run: {

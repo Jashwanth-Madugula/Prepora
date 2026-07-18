@@ -1,3 +1,18 @@
+/**
+ * @file src/services/judge.service.ts
+ * @category Business Logic Service
+ *
+ * Why this code exists:
+ * Implements core business operations and logic handlers for "judge.service.ts".
+ * - Specifically handles compilation, remote sandbox code execution, code editor configuration, and automated AI reviews.
+ *
+ * What problem it solves:
+ * - Decouples computation-heavy, algorithmic, or external API-dependent operations from HTTP controllers (Next.js route handlers) to ensure clean separation of concerns and high testability.
+ *
+ * How it works internally:
+ * - Exposes async methods and utilities that process input datasets, interface with Mongoose models, and communicate with external services (like Groq, Cloudinary, or Judge0 compilers).
+ */
+
 import Groq from "groq-sdk";
 
 /**
@@ -8,6 +23,7 @@ import Groq from "groq-sdk";
  * and returning a structured summary.
  */
 
+// Instantiate Groq client with API key loading
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY!,
 });
@@ -17,6 +33,10 @@ interface HiddenTestCase {
   expectedOutput: string;
 }
 
+/**
+ * Evaluates candidate code submissions.
+ * Checks code against hidden test cases and generates correctness, complexity, and styling reports.
+ */
 export async function judgeSubmission({
   language,
   code,
@@ -28,6 +48,7 @@ export async function judgeSubmission({
   testCases: HiddenTestCase[];
   questionDescription?: string;
 }) {
+  // Guard condition: if no test cases are specified, return empty structure
   if (!testCases || testCases.length === 0) {
     return {
       passed: 0,
@@ -40,8 +61,10 @@ export async function judgeSubmission({
     };
   }
 
+  // Format test case structures to pretty-printed strings for the AI prompt
   const testCasesText = JSON.stringify(testCases, null, 2);
 
+  // Construct precise evaluation prompt for the model
   const prompt = `
 You are a senior FAANG technical interviewer and compiler simulator.
 Your job is to evaluate a candidate's code and grade it against a set of hidden test cases.
@@ -95,6 +118,8 @@ Return ONLY a valid JSON object matching the following structure. Do not wrap in
 }
 `;
 
+  // Request Groq completions.
+  // Use temperature = 0.1 for maximum determinism and logic stability.
   const result = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     messages: [
@@ -112,7 +137,7 @@ Return ONLY a valid JSON object matching the following structure. Do not wrap in
     let parsed: any = null;
     let found = false;
 
-    // First try standard codeblock matches
+    // Regex match to check if output is wrapped inside markdown code blocks (e.g. ```json ... ```)
     const codeBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
     if (codeBlockMatch && codeBlockMatch[1]) {
       try {
@@ -121,8 +146,8 @@ Return ONLY a valid JSON object matching the following structure. Do not wrap in
       } catch (_) {}
     }
 
+    // Fallback: Scan backward for a '{' that starts a valid JSON block if markdown match failed
     if (!found) {
-      // Scan backward for a '{' that starts a valid JSON block
       for (let i = text.length - 1; i >= 0; i--) {
         if (text[i] === "{") {
           const candidate = text.substring(i);
@@ -143,7 +168,7 @@ Return ONLY a valid JSON object matching the following structure. Do not wrap in
       throw new Error("Could not find a valid JSON object in Groq response.");
     }
 
-    // Programmatically enforce: if the code passes all test cases (correct/optimal), empty the reviews
+    // Programmatically enforce: if the code passes all test cases (correct/optimal), clear out missing edge cases and improvements
     if (parsed && (parsed.predictedPassRate === 100 || parsed.passed === parsed.total)) {
       if (parsed.aiReview) {
         parsed.aiReview.edgeCasesMissing = [];
@@ -155,7 +180,8 @@ Return ONLY a valid JSON object matching the following structure. Do not wrap in
     return parsed;
   } catch (error) {
     console.error("JSON parsing error in AI judge service:", error, "\nRaw Response was:", text);
-    // Return a fallback structured output
+    
+    // Return a structured default fallback report indicating evaluation failure
     const results = testCases.map(tc => ({
       input: tc.input,
       expected: tc.expectedOutput,

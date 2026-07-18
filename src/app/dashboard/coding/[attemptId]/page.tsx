@@ -1,5 +1,21 @@
 "use client";
 
+
+/**
+ * @file src/app/dashboard/coding/[attemptId]/page.tsx
+ * @category Utility / Helper
+ *
+ * Why this code exists:
+ * 
+ * 
+ *
+ * What problem it solves:
+ * - 
+ *
+ * How it works internally:
+ * - 
+ */
+
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Editor from "@monaco-editor/react";

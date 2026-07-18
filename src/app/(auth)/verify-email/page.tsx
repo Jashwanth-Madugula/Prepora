@@ -1,5 +1,21 @@
 "use client";
 
+
+/**
+ * @file src/app/(auth)/verify-email/page.tsx
+ * @category Utility / Helper
+ *
+ * Why this code exists:
+ * 
+ * 
+ *
+ * What problem it solves:
+ * - 
+ *
+ * How it works internally:
+ * - 
+ */
+
 import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";

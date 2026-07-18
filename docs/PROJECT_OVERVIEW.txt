@@ -1,0 +1,233 @@
+================================================================================
+                           PREPORA PROJECT OVERVIEW
+================================================================================
+
+Prepora is an AI-powered placement readiness engine designed to help candidates 
+prepare for technical and behavioral interviews. It provides a comprehensive 
+testing and analysis suite including Resume ATS Analysis, Mock Interviews (using 
+Audio/Video capture and speech transcription), Coding Round simulators with execution, 
+Adaptive Aptitude tests, and Core Subject assessments.
+
+This document describes the full system architecture, frontend-backend data flows, 
+database design, API flows, key design decisions, and the technology stack utilized.
+
+--------------------------------------------------------------------------------
+1. FULL SYSTEM ARCHITECTURE EXPLANATION
+--------------------------------------------------------------------------------
+Prepora is built as a modern, unified Next.js web application utilizing the App Router.
+It serves both as the frontend client interface and the backend serverless API layer.
+
+The architecture consists of three primary layers:
+1. Client Layer (Frontend):
+   - Built using React 19 and Next.js App Router.
+   - Styled with TailwindCSS and custom CSS for sleek dark mode aesthetics.
+   - Leverages components from Shadcn UI, Framer Motion (for animations), and
+     Lucide React (for iconography).
+   - Dynamic interfaces include the Monaco Code Editor (for the coding round) and
+     HTML5 MediaRecorder (for audio/video interview recording).
+   - Global authentication state is managed via React Context (AuthContext) and
+     persisted through secure HTTP-Only cookies.
+
+2. API Layer (Backend Router):
+   - Structured around Next.js Route Handlers (`src/app/api/...`).
+   - Serves as the gateway for request verification, rate limiting, and business logic execution.
+   - The middleware/routing controller utilizes a custom route proxy (`src/proxy.ts`) 
+     which enforces CSRF protection, protected route authentication guards, and automatic 
+     JWT access token refreshes via Refresh Token Rotation (RTR).
+
+3. Business Logic & Integration Layer (Services & Models):
+   - Services (`src/services/`): Decoupled utility classes and modules responsible for
+     core business logic. This includes interfacing with Groq SDK (AI evaluations),
+     Cloudinary (media storage), Judge0/CodeRunner (compiler sandbox), PDF-Parse (resume parsing),
+     and Nodemailer (notifications).
+   - Models (`src/models/`): Mongoose Schemas defining structured data representations 
+     for users, profiles, resumes, interviews, coding rounds, and aptitude tests.
+   - Database: MongoDB (via Mongoose ORM) is used to persist application state.
+
+--------------------------------------------------------------------------------
+2. FRONTEND - BACKEND FLOW (DATA & CONTROL)
+--------------------------------------------------------------------------------
+The application utilizes an HTTP cookie-based session state. The flow is as follows:
+
+   +------------------+                   +------------------+
+   |  Client Browser  |                   | Next.js API /    |
+   |   (React 19)     |                   |  Route Handlers  |
+   +--------+---------+                   +--------+---------+
+            |                                      |
+            |--- 1. Request page/resource -------->|
+            |                                      | [Proxy check (proxy.ts)]
+            |<-- 2. Validate/Redirect/Serve HTML --|
+            |                                      |
+            |--- 3. Mutative API Calls (JSON) ---->|
+            |    (e.g., submit code, upload audio) | [CSRF Origin & Token Check]
+            |                                      | [Execute API Route Logic]
+            |                                      | [Talks to Services & Mongoose]
+            |<-- 4. Secure JSON Payload response --|
+            |                                      |
+
+Detailed Interactive Flows:
+A. Resume Parser:
+   1. User uploads a PDF file using the dropzone in React.
+   2. File is sent to `POST /api/resumes`.
+   3. Backend receives the multipart form data, uploads the raw file to Cloudinary,
+      and extracts text using `pdf-parse`.
+   4. Text is passed to `AtsService` which evaluates the resume against standard ATS rules,
+      or compares it to a Job Description using Groq API (Llama-3).
+   5. Results are saved in MongoDB and returned to the client dashboard.
+
+B. AI Interview Round:
+   1. User starts an interview session (`/dashboard/interviews/[id]`).
+   2. HTML5 MediaRecorder captures audio/video bytes.
+   3. The client uploads raw media files sequentially via API.
+   4. Media files are stored on Cloudinary. The transcription service transcribes audio using OpenAI/Groq Whisper.
+   5. The transcript is sent to `evaluateAnswer()` in `interview-evaluation.service.ts`
+      which prompts the Llama-3 model on Groq to rate candidate fluency, clarity, confidence,
+      structure, completeness, communication, and accuracy.
+   6. Metrics are saved as Mongoose documents.
+
+C. Coding Attempt:
+   1. Candidate writes code in the Monaco Editor.
+   2. Submissions are sent to `/api/coding/run` or `submit`.
+   3. `code-runner.service.ts` submits the code compilation/execution payload to a sandbox compiler API (Judge0).
+   4. Output is analyzed against pre-configured test cases.
+   5. Groq Llama AI review service performs an automated code review detailing code efficiency, readability, and design improvements.
+
+--------------------------------------------------------------------------------
+3. DATABASE DESIGN EXPLANATION
+--------------------------------------------------------------------------------
+The database is built on MongoDB, a document-store database, configured and validated
+using Mongoose models. Relationships are defined using `mongoose.Schema.Types.ObjectId`
+referencing.
+
+Key Schemas:
+1. User Schema (`User.ts`):
+   - Holds core user authentication fields: fullName, username, email, password (hashed).
+   - Manages authorization via user role ("USER", "ADMIN", "SUPER_ADMIN").
+   - Implements account locks (`loginAttempts`, `lockUntil`) to mitigate brute force attacks.
+   - Stores session management structures: `refreshToken` and an array of active sessions 
+     (`refreshTokens` containing token hashes, IP address, user agent, timestamps).
+
+2. Profile Schema (`Profile.ts`):
+   - Refers to User (`type: ObjectId, ref: 'User'`).
+   - Stores user's personal details, bio, links (GitHub, LinkedIn), and education.
+
+3. Resume Schema (`Resume.ts`):
+   - Links to User.
+   - Stores Cloudinary URLs, extracted raw text, parsed structure (skills, projects, experience),
+     and ATS readiness metrics (formatting, content, completeness, styling, and ATS scores).
+
+4. Interview & InterviewQuestion Schemas (`interview.model.ts`, `interview-question.model.ts`):
+   - Tracks a mock interview template (job title, description, time limit, questions).
+   - Tracks interview attempts: overall score, status (completed, in-progress), and references
+     an array of responses containing transcripts, video/audio links, and rating matrices.
+
+5. AptitudeTest, AptitudeQuestion & AptitudeAttempt Schemas:
+   - Tracks standard and adaptive aptitude testing systems.
+   - `AptitudeQuestion`: Stores question body, options, correct answer, category, and difficulty level (EASY, MEDIUM, HARD).
+   - `AptitudeAttempt`: Tracks user, test, overall score, time spent, and detail list of chosen answers.
+
+6. CodingQuestion, CodingAttempt & CodingRoundAttempt Schemas:
+   - Houses coding problems (title, description, difficulty, test cases with input/output, code templates).
+   - `CodingAttempt`: Tracks run-time results, code written, compile messages, pass rate, and AI review text.
+
+--------------------------------------------------------------------------------
+4. API FLOW DIAGRAM (TEXT FORM)
+--------------------------------------------------------------------------------
+
++------------------------------------------------------------------------------+
+| CLIENT ACTION -> FETCH REQUEST                                               |
++------------------------------------+-----------------------------------------+
+                                     |
+                                     v
++------------------------------------+-----------------------------------------+
+| ROUTE PROXY GUARD (src/proxy.ts)                                             |
+|                                                                              |
+| 1. Checks CSRF header (Origin & Host) on POST/PUT/DELETE                     |
+| 2. Validates JWT Access Token in HTTP-Only Cookie                            |
+|    - IF valid: Proceeds to endpoint.                                         |
+|    - IF expired but Refresh Token is valid:                                  |
+|        a. Calls /api/auth/refresh-token                                      |
+|        b. Rotates tokens (creates new access/refresh pair, hashes in DB)       |
+|        c. Appends cookies and proceeds.                                      |
+|    - IF both expired: Redirects to /login                                    |
++------------------------------------+-----------------------------------------+
+                                     |
+                                     v
++------------------------------------+-----------------------------------------+
+| ROUTE HANDLER (src/app/api/...)                                              |
+|                                                                              |
+| 1. Initializes database via dbConnect() (src/lib/db.ts)                      |
+| 2. Checks Rate Limit via rateLimit.ts (src/lib/rateLimit.ts)                 |
+| 3. Parses request parameters & validates body using Zod schema               |
++------------------------------------+-----------------------------------------+
+                                     |
+                                     v
++------------------------------------+-----------------------------------------+
+| SERVICES LAYER (src/services/...)                                            |
+|                                                                              |
+| 1. Invokes specific services (AtsService, CodeRunner, Groq AI, Cloudinary)   |
+| 2. Evaluates responses, performs computations, and mutates MongoDB schemas   |
++------------------------------------+-----------------------------------------+
+                                     |
+                                     v
++------------------------------------+-----------------------------------------+
+| RESPONSE SENT -> CLIENT RENDER                                               |
++------------------------------------------------------------------------------+
+
+--------------------------------------------------------------------------------
+5. KEY DESIGN DECISIONS
+--------------------------------------------------------------------------------
+1. CSRF Protection for API Actions:
+   - Evaluates incoming request origin/referer details against the host header during mutative operations (POST/PUT/DELETE).
+   - Mitigates Cross-Site Request Forgery without complex token handshakes, by utilizing standard Web APIs.
+
+2. Refresh Token Rotation (RTR):
+   - To prevent session theft and token reuse attacks, every refresh action invalidates the previous refresh token and replaces it with a new one.
+   - The token stored in the database is fully hashed (bcrypt salt 10) so that a database breach doesn't compromise active user sessions.
+
+3. Fail-Safe Environment Checking:
+   - Key security libraries (`jwt.ts`, `mail.ts`) validate environment properties during file compile/import. If variables like `JWT_ACCESS_SECRET` are not set, the process throws an explicit startup error instead of utilizing insecure fallbacks.
+
+4. Decoupled AI Evaluation:
+   - Evaluator prompts use native JSON mode constraints on LLM completion calls to ensure the response can be strictly parsed. This separates prompt construction from API route controllers, ensuring cleaner maintenance.
+
+--------------------------------------------------------------------------------
+6. TECHNOLOGY EXPLANATION SECTION
+--------------------------------------------------------------------------------
+
+- React (v19)
+  * Why: Component-based UI declarative rendering.
+  * Problem it solves: Handles complex state binding for real-time dashboards, code editors, and media streams efficiently.
+  * Where: Inside `src/app/` (page views) and `src/components/` (interactive panels).
+
+- Next.js (v16 App Router)
+  * Why: Server-side rendering (SSR), static site generation, and serverless route handling in a single package.
+  * Problem it solves: Simplifies file-system routing, SEO metadata control, and middleware execution.
+  * Where: The entire structure under `src/app/` is powered by Next.js.
+
+- MongoDB & Mongoose
+  * Why: Flexible, document-oriented storage with schema validation.
+  * Problem it solves: Allows nested logs (e.g. detailed question attempt lists within tests) without complex SQL joins.
+  * Where: MongoDB schemas are configured in `src/models/`, and connections are managed in `src/lib/db.ts`.
+
+- Groq SDK (Llama-3)
+  * Why: Fast, high-throughput LLM API.
+  * Problem it solves: Powers all AI feedback generation (resume evaluation, behavioral answers rating, coding round feedback) with sub-second execution speeds.
+  * Where: Integrated in `src/services/` (e.g. `ats.service.ts`, `interview-evaluation.service.ts`, `ai-code-review.service.ts`).
+
+- Cloudinary
+  * Why: Managed cloud media storage.
+  * Problem it solves: Offloads media processing and bandwidth hosting from the server for video and audio interview files and PDF resumes.
+  * Where: Configured in `src/lib/cloudinary.ts` and managed through `src/services/cloudinary.service.ts`.
+
+- Judge0 (or custom CodeRunner)
+  * Why: Remote compilation sandbox.
+  * Problem it solves: Compiles and runs user-submitted code in multiple languages (Python, Java, C++, JS) in an isolated, secure environment.
+  * Where: `src/services/code-runner.service.ts` and `src/services/judge.service.ts`.
+
+- pdf-parse
+  * Why: Server-side PDF binary parser.
+  * Problem it solves: Converts raw resume binary data into raw ASCII strings for parser analysis.
+  * Where: `src/services/pdf-parser.service.ts`.
+
+================================================================================

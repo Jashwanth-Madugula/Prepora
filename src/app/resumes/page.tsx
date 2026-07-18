@@ -1,5 +1,21 @@
 "use client";
 
+
+/**
+ * @file src/app/resumes/page.tsx
+ * @category Utility / Helper
+ *
+ * Why this code exists:
+ * 
+ * 
+ *
+ * What problem it solves:
+ * - 
+ *
+ * How it works internally:
+ * - 
+ */
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import ResumeUploader from "@/components/resumes/ResumeUploader";

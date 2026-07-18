@@ -1,0 +1,640 @@
+================================================================================
+                    REHEASA AI MOCK ASSESSMENT PLATFORM
+                        TECH INTERVIEW QUESTION KEY
+================================================================================
+
+This document contains a curated list of technical, architectural, debugging,
+and behavioral interview questions directly mapped to the implementation details,
+files, and code blocks of the Reheasa AI mock assessment platform.
+
+
+--------------------------------------------------------------------------------
+                         BEGINNER QUESTIONS
+--------------------------------------------------------------------------------
+
+QUESTION 1: Why does db.ts cache the connection on global.mongoose instead of creating a new connection with mongoose.connect() on every invocation?
+- File Reference: src/lib/db.ts
+- Why Interviewer Asks It: Evaluates basic understanding of serverless backend architectures (like Next.js API Route Handlers) and connection management.
+- Strong Answer:
+  Next.js API routes run in serverless environments, meaning instances can be created and destroyed dynamically. If we call mongoose.connect() directly in every route, each API call spawns a new connection to MongoDB. Under load, this quickly exhausts MongoDB's available connection pool. By caching the connection on the global object (which persists across serverless hot starts), subsequent invocations reuse the active connection pool instance.
+
+QUESTION 2: How does the AI question generator generate new aptitude questions without duplicating questions that the candidate has already answered?
+- File Reference: src/services/aptitude/aptitude-ai.service.ts
+- Why Interviewer Asks It: Tests practical knowledge of prompt engineering and parameter passing to external LLM APIs.
+- Strong Answer:
+  The function generateAptitudeQuestions() takes an optional array parameter `excludeQuestionTexts`. If populated, it dynamically constructs an avoid instruction block: `CRITICAL: Do NOT generate any of the following questions...`. This text is appended to the prompt sent to Groq. If the Groq API call fails or is skipped, the local fallback method getLocalQuestions() uses this exclude list to filter questions out of the static question bank.
+
+QUESTION 3: Explain how the login form is validated before the submit payload is sent to the server.
+- File Reference: src/components/auth/LoginForm.tsx & src/lib/validations/auth.ts
+- Why Interviewer Asks It: Assesses client-side form validation practices, Zod schema usage, and UI reactivity.
+- Strong Answer:
+  The application defines a strict input verification schema `loginSchema` using Zod in `src/lib/validations/auth.ts`. In `LoginForm.tsx`, this schema is integrated into React Hook Form via the `@hookform/resolvers/zod` resolver. When the user submits the form, React Hook Form interceptively runs Zod's validation. If validation fails (e.g. empty password or invalid email format), errors are set reactively in state, preventing the network fetch request.
+
+QUESTION 4: How does the application restrict user resume uploads to PDFs?
+- File Reference: src/components/resumes/ResumeUploader.tsx
+- Why Interviewer Asks It: Checks understanding of HTML5 file drop zones and input validation guards.
+- Strong Answer:
+  The uploader uses the react-dropzone library. It configures the dropzone hook to accept only `application/pdf` MIME types. If a candidate drops a JPEG or DOCX file, it is automatically rejected before upload logic is invoked.
+
+QUESTION 5: What is the purpose of hashing user passwords, and what library wrapper does Reheasa use for this?
+- File Reference: src/lib/bcrypt.ts
+- Why Interviewer Asks It: Validates basic concepts of password security and cryptographic hashing.
+- Strong Answer:
+  Passwords must never be stored in plain text to prevent compromises in the event of database leaks. Reheasa hashes passwords using `bcryptjs` (salt strength 10). It provides wrappers `hashPassword()` and `comparePassword()` to standardize secure storage and validation check calls.
+
+QUESTION 6: How does file.ts check if an uploaded file is a valid image or PDF?
+- File Reference: src/lib/file.ts
+- Why Interviewer Asks It: Tests basic knowledge of helper files and input file checking.
+- Strong Answer:
+  It checks the file's MIME type against a list of allowed types (e.g. `application/pdf`, `image/png`, `image/jpeg`). This acts as a first line of defense before files are sent to Cloudinary or parsed.
+
+QUESTION 7: Explain the utility function `cn` in utils.ts. Why is it used in Tailwind project components?
+- File Reference: src/lib/utils.ts
+- Why Interviewer Asks It: Checks understanding of merging Tailwind utility classes dynamically.
+- Strong Answer:
+  The `cn` function combines `clsx` and `tailwind-merge`. It allows components to take dynamic class parameters and resolves styling conflicts (e.g. if a component has default class `px-4` but receives `px-6` as a prop, tailwind-merge resolves it to `px-6` correctly).
+
+QUESTION 8: What properties does the RateLimit schema track, and what database engine handles it?
+- File Reference: src/models/RateLimit.ts
+- Why Interviewer Asks It: Checks basic schema knowledge and database architecture understanding.
+- Strong Answer:
+  The RateLimit schema tracks the `ip` address (as a string), the request `count` (as a number), and the last request `createdAt` timestamp. It is backed by MongoDB and managed via Mongoose.
+
+QUESTION 9: Explain the `JWTPayload` interface. What fields are encrypted within our user tokens?
+- File Reference: src/types/auth.ts
+- Why Interviewer Asks It: Tests understanding of custom type declarations and token metadata schemas.
+- Strong Answer:
+  The `JWTPayload` interface specifies the user's identification keys: `userId` (string), `email` (string), and `role` (USER, ADMIN, or SUPER_ADMIN). These fields are embedded in access and refresh tokens.
+
+QUESTION 10: What state properties does the AuthContext provider manage?
+- File Reference: src/context/AuthContext.tsx
+- Why Interviewer Asks It: Validates basic React context and user session state tracking.
+- Strong Answer:
+  It tracks: `user` (holding user metadata or null), `loading` (boolean indicating if the me-auth API check has completed), and exports `login()`, `logout()`, and `refreshUser()` functions.
+
+QUESTION 11: How does the CodingTimer track elapsed time, and what happens when the timer reaches zero?
+- File Reference: src/components/coding/CodingTimer.tsx
+- Why Interviewer Asks It: Checks basic hooks rendering logic and lifecycle callback handling.
+- Strong Answer:
+  It takes a `duration` prop, sets up a React state for time remaining, and runs a `setInterval` ticking down every second inside `useEffect`. When the counter reaches zero, it clears the interval and invokes a callback (e.g., `onTimeout` or `autoSubmit()`).
+
+QUESTION 12: What library does pdf-parser.service.ts use to convert PDF binaries to raw text strings?
+- File Reference: src/services/pdf-parser.service.ts
+- Why Interviewer Asks It: Evaluates knowledge of text extraction libraries.
+- Strong Answer:
+  It uses the `pdf-parse` npm package. It receives a binary buffer of the uploaded file and returns a Promise containing the extracted text data.
+
+QUESTION 13: What sections of user details are configured in the Profile schema?
+- File Reference: src/models/Profile.ts
+- Why Interviewer Asks It: Checks database schema models structure knowledge.
+- Strong Answer:
+  The Profile schema tracks: reference to `userId` (User collection), `bio`, social links (`github`, `linkedin`, `portfolio`), `skills` (array of strings), `education`, and `experience` arrays.
+
+QUESTION 14: How does the logout API route tell the user's browser to discard active credentials?
+- File Reference: src/app/api/auth/logout/route.ts
+- Why Interviewer Asks It: Tests basic knowledge of HTTP cookies management in Next.js routes.
+- Strong Answer:
+  The logout route returns a response that sets the `accessToken` and `refreshToken` cookies to an empty string, sets their `maxAge` to `0`, and sets their expiration date to the past. This forces the browser to delete the cookies.
+
+QUESTION 15: Why do we keep static configurations like compiler language options in a constants folder?
+- File Reference: src/constants/index.ts
+- Why Interviewer Asks It: Checks understanding of clean code organization practices.
+- Strong Answer:
+  Storing static values (e.g. supported languages: Python, Java, JS, C++) in constants prevents hardcoding values throughout multiple files. It makes modifications easy since we only have to update them in one place.
+
+QUESTION 16: How does the admin API verify if an requesting user has the authority to view admin metrics?
+- File Reference: src/app/api/admin/route.ts
+- Why Interviewer Asks It: Tests basic role-based access control checking in endpoints.
+- Strong Answer:
+  It checks the requester's JWT token payload. If the token is missing, invalid, or the user's role is not 'ADMIN' or 'SUPER_ADMIN', it rejects the call immediately with a 403 Forbidden status.
+
+QUESTION 17: What event triggers the visibility toggle of the Rename Dialog box?
+- File Reference: src/components/resumes/RenameResumeDialog.tsx
+- Why Interviewer Asks It: Checks basic modal state management understanding in React.
+- Strong Answer:
+  The visibility is controlled by an `isOpen` boolean state, which is toggled to true when the user clicks 'Rename' from the resume action cards, and set to false when they click 'Cancel' or close the dialog.
+
+QUESTION 18: What operation does a GET call on the subjects API route perform?
+- File Reference: src/app/api/subjects/route.ts
+- Why Interviewer Asks It: Checks basic HTTP routing controller knowledge.
+- Strong Answer:
+  It queries the `SubjectAttempt` collection to fetch a list of all subject assessments attempted by the currently logged-in candidate, ordered by date.
+
+QUESTION 19: What happens if CLOUDINARY_URL is missing in our env settings on startup?
+- File Reference: src/lib/cloudinary.ts
+- Why Interviewer Asks It: Validates fail-safe configuration handling.
+- Strong Answer:
+  The script will output a warning to console during configuration import but will not crash the entire app unless a file upload service is triggered, which will then throw an upload initialization error.
+
+QUESTION 20: How are multiple choice options stored in the AptitudeQuestion schema?
+- File Reference: src/models/aptitude-question.model.ts
+- Why Interviewer Asks It: Checks database array schema modeling.
+- Strong Answer:
+  They are stored as an array of strings: `options: { type: [String], required: true }`. The model also stores `correctAnswer` as a string matching one of the options.
+
+
+--------------------------------------------------------------------------------
+                         INTERMEDIATE QUESTIONS
+--------------------------------------------------------------------------------
+
+QUESTION 21: In your proxy middleware, you check the 'origin', 'referer', and 'host' headers for POST, PUT, DELETE, and PATCH requests, but not for GET requests. Why?
+- File Reference: src/proxy.ts
+- Why Interviewer Asks It: Tests security knowledge of Cross-Site Request Forgery (CSRF) and safe vs. unsafe HTTP methods.
+- Strong Answer:
+  GET requests are safe/idempotent and should not change system state. CSRF attacks exploit cookie auth to force users to perform state-changing operations (like changing passwords, deleting accounts, or initiating actions). By validating that the Origin or Referer domain matches the Host header on mutative requests, we block cross-origin form submissions and scripts from executing actions on behalf of authenticated users.
+
+QUESTION 22: Explain how the sliding-window rate limiter works using the database. What is a potential performance bottleneck here, and how does your database schema address it?
+- File Reference: src/lib/rateLimit.ts
+- Why Interviewer Asks It: Assesses understanding of rate-limiting algorithms and database query optimizations.
+- Strong Answer:
+  The rate limiter logs a document for each request in a `RateLimit` collection containing the IP address and request timestamp. On each incoming request, it queries the database for logs matching the client's IP within the sliding window window. If the count exceeds the threshold, the request is blocked. The bottleneck is that this collection grows rapidly. The schema addresses this by defining a TTL index on the `createdAt` timestamp, allowing MongoDB to automatically delete expired logs.
+
+QUESTION 23: In analyzeATSWithGroq(), if the Groq API fails or rate limits, how does your application ensure the user still receives an ATS report?
+- File Reference: src/services/ats.service.ts
+- Why Interviewer Asks It: Tests system resilience, graceful degradation, and offline strategy design patterns.
+- Strong Answer:
+  If the Groq AI service throws an error (e.g. API key mismatch, network timeouts), the catch block invokes `parseResume()` in `resume-parser.service.ts` to extract skills and sections using local regex/keyword matching, and passes that to `analyzeATS()` which computes a local heuristic score based on predefined weights. This guarantees high availability.
+
+QUESTION 24: Why does changing or resetting a user's password invalidate their refresh tokens in the database?
+- File Reference: src/app/api/auth/reset-password/route.ts
+- Why Interviewer Asks It: Tests session security management, authorization flows, and session invalidation.
+- Strong Answer:
+  If an account is compromised or a user resets their password, all other active sessions (browsers, devices) must be invalidated immediately. By deleting the stored refresh token hashes (`refreshToken` and `refreshTokens` array) in the User document upon password change, any other device attempting to perform an auto-refresh check will fail validation in the proxy middleware, forcing them to log out.
+
+QUESTION 25: Explain how uploading a file buffer directly to Cloudinary via uploadStream works in Node.js. What is the benefit over local disk storage?
+- File Reference: src/services/cloudinary.service.ts
+- Why Interviewer Asks It: Checks knowledge of stream handling and serverless infrastructure limits.
+- Strong Answer:
+  Cloudinary's `upload_stream` receives buffer streams over network pipes. Instead of writing file buffers to local disk storage (`/tmp`), we use a stream converter that pipes the file data buffer directly. This is crucial for serverless systems (like Next.js Route Handlers) which have constrained read-write disk access.
+
+QUESTION 26: What is a 'fail-fast' configuration pattern, and how is it implemented inside jwt.ts?
+- File Reference: src/lib/jwt.ts
+- Why Interviewer Asks It: Checks backend configuration validation best practices.
+- Strong Answer:
+  Fail-fast means checking configurations during compilation/initialization and crashing the process immediately if mandatory env parameters are missing. In `jwt.ts`, the file checks `process.env.JWT_ACCESS_SECRET` at the top level and throws a hard error if it is not defined, preventing the app from starting up with insecure or default keys.
+
+QUESTION 27: In generateAptitudeQuestions(), if the Groq LLM response returns markdown blocks (e.g. ```json ... ```), how does your service sanitize it before parsing?
+- File Reference: src/services/aptitude/aptitude-ai.service.ts
+- Why Interviewer Asks It: Tests handling of LLM outputs and regex formatting cleaning.
+- Strong Answer:
+  The parser runs `response.replace(/```json/g, '').replace(/```/g, '').trim()` to strip out code blocks before calling `JSON.parse()`. This handles instances where the AI outputs markdown formatting tags despite prompt instructions.
+
+QUESTION 28: Why does the me/ route sanitize the returned user object by deleting fields like password and refreshTokens?
+- File Reference: src/app/api/auth/me/route.ts
+- Why Interviewer Asks It: Tests security best practices regarding data sanitization.
+- Strong Answer:
+  We must never expose critical credentials or session hashes to client-side JS. The backend explicitly structures the payload response to include only metadata (name, email, role, etc.), omitting sensitive details.
+
+QUESTION 29: Explain why we hash refresh tokens using bcrypt before saving them to MongoDB in refresh-token/route.ts.
+- File Reference: src/app/api/auth/refresh-token/route.ts
+- Why Interviewer Asks It: Tests database security, JWT management, and credential protection.
+- Strong Answer:
+  If an attacker compromises the MongoDB database, they could steal raw refresh tokens to forge access cookies. By hashing tokens with bcrypt (`token-hash.ts`), a database compromise does not yield active session hijack codes since hashes cannot be reversed back to active tokens.
+
+QUESTION 30: Why do we use the Monaco editor component in React? How does it configure state bindings?
+- File Reference: src/components/coding/CodeEditor.tsx
+- Why Interviewer Asks It: Checks frontend coding integrations and state synchronization.
+- Strong Answer:
+  Monaco provides IDE-like editing features (completion, styling) in the browser. In React, we hook the component with a `value` state representing the solution text, and update it inside the editor's `onChange` event callback.
+
+QUESTION 31: How does resume-parser.service.ts structure its prompt to extract fields like skills and education in structured JSON from resume strings?
+- File Reference: src/services/resume-parser.service.ts
+- Why Interviewer Asks It: Tests prompt engineering schemas and structural response generation.
+- Strong Answer:
+  It provides a clear schema format in the instructions, specifying field types, array parameters, and enforces json mode (`response_format: { type: 'json_object' }`). This forces Groq to map parsed resume strings directly to JSON keys.
+
+QUESTION 32: Explain the lock-out logic fields (loginAttempts and lockUntil) in the User model.
+- File Reference: src/models/User.ts
+- Why Interviewer Asks It: Tests basic authorization security rules.
+- Strong Answer:
+  To prevent brute-force attacks, we count failed logins. If `loginAttempts` reaches a threshold (e.g. 5), the account is locked until the timestamp in `lockUntil`. Future login attempts are rejected during this window.
+
+QUESTION 33: How does the Zod profile schema validation handle links (like GitHub/LinkedIn) optionally?
+- File Reference: src/lib/validations/profile.ts
+- Why Interviewer Asks It: Tests partial field validations using Zod schema builders.
+- Strong Answer:
+  It uses `.optional().or(z.literal(''))` or URL validations `z.string().url().optional()`. This allows forms to submit blank links without triggering validation schema errors.
+
+QUESTION 34: What HTML5 API records voice signals in audio-recorder.tsx?
+- File Reference: src/components/interview/audio-recorder.tsx
+- Why Interviewer Asks It: Tests media processing APIs knowledge.
+- Strong Answer:
+  It uses the `MediaRecorder` API. It captures the candidate's audio stream chunks from `navigator.mediaDevices.getUserMedia()`, collects them in a blob array, and compiles them into a single audio file upon stopping.
+
+QUESTION 35: How does coding-round-attempt.model.ts represent the status of a multi-question coding assessment?
+- File Reference: src/models/coding-round-attempt.model.ts
+- Why Interviewer Asks It: Checks schema design state tracking.
+- Strong Answer:
+  It tracks candidate attempt metadata: `status` ('started' | 'in-progress' | 'completed'), `questions` array referencing coding attempt subdocuments, and `score` tracking overall test marks.
+
+QUESTION 36: What prompts does ai-code-review.service.ts use to evaluate candidates' code quality?
+- File Reference: src/services/ai-code-review.service.ts
+- Why Interviewer Asks It: Checks AI code rating logic.
+- Strong Answer:
+  It asks the LLM to inspect the code's complexity, naming conventions, safety concerns, and potential memory leaks. It then outputs detailed feedback and rates correctness, style, and efficiency.
+
+QUESTION 37: What does the run/ API route perform before calling the code compilation runner service?
+- File Reference: src/app/api/coding/run/route.ts
+- Why Interviewer Asks It: Checks route validation and input sanitization.
+- Strong Answer:
+  It establishes the DB connection, verifies the candidate's token, checks rate limits, and validates that the code, language, and inputs are present in the request body.
+
+QUESTION 38: What is the fallback configuration for email notifications in mail.ts?
+- File Reference: src/lib/mail.ts
+- Why Interviewer Asks It: Tests application notifications configurations.
+- Strong Answer:
+  It checks for SMTP passes or EmailJS keys. If SMTP is configured, it initializes a nodemailer transporter; if EmailJS is present, it uses HTTP posts. If both are missing, it logs a fail-fast warning.
+
+QUESTION 39: What request payload fields are parsed inside the resume ATS compare route?
+- File Reference: src/app/api/resumes/ats-compare/route.ts
+- Why Interviewer Asks It: Tests API schema parameters processing.
+- Strong Answer:
+  It parses `resumeId` (to query resume text from MongoDB) and `jobDescription` (raw string input by user to evaluate matching compatibility).
+
+QUESTION 40: How are subject assessment questions generated inside subject-ai.service.ts?
+- File Reference: src/services/subject-ai.service.ts
+- Why Interviewer Asks It: Tests subject test logic parameters.
+- Strong Answer:
+  The service queries Groq to create multiple-choice questions for subjects like DBMS, OS, or CN, utilizing templates to format categories, options, and explanations.
+
+QUESTION 41: What request parser parses multipart video uploads in upload-video/route.ts?
+- File Reference: src/app/api/interviews/upload-video/route.ts
+- Why Interviewer Asks It: Checks multipart parser integrations.
+- Strong Answer:
+  It reads the request as form-data using `req.formData()`, retrieves the video file blob under the key 'video', converts it to a buffer, and uploads it to Cloudinary.
+
+QUESTION 42: Explain how save-draft/ allows candidates to preserve work-in-progress code solutions.
+- File Reference: src/app/api/coding/round/[roundId]/save-draft/route.ts
+- Why Interviewer Asks It: Tests session draft persistence logic.
+- Strong Answer:
+  It takes the current editor solution buffer from the client and updates the corresponding subdocument in the `CodingRoundAttempt` collection without triggering test case evaluations.
+
+QUESTION 43: How does the AptitudeAttempt schema track candidate answers to individual questions?
+- File Reference: src/models/aptitude-attempt.model.ts
+- Why Interviewer Asks It: Checks candidate attempt validation schemas.
+- Strong Answer:
+  It uses a nested array of objects containing `questionId` references, `selectedAnswer` string values, `isCorrect` booleans, and `timeSpent` counters.
+
+QUESTION 44: What cascading database deletions are executed when a user deletes their account?
+- File Reference: src/app/api/user/delete-account/route.ts
+- Why Interviewer Asks It: Tests cascading deletion strategies in databases.
+- Strong Answer:
+  It deletes the user's core document in `User` and cascades to delete profiles, resumes, aptitude attempts, coding round attempts, and interview records matching the user's ID.
+
+QUESTION 45: What factors determine the local match score calculations in ats.service.ts compareResumeWithJD?
+- File Reference: src/services/ats.service.ts
+- Why Interviewer Asks It: Checks grading heuristic algorithm weights.
+- Strong Answer:
+  It computes local match scores by comparing keywords in the JD against resume skills, measuring keyword overlap, density, and experience metrics.
+
+QUESTION 46: How is transcription triggered after audio files are uploaded in the interview flow?
+- File Reference: src/app/api/interviews/transcribe/route.ts
+- Why Interviewer Asks It: Checks async audio processing flow.
+- Strong Answer:
+  After audio blobs are sent to Cloudinary, the transcription endpoint is called to process the audio URL and extract candidate speech text using transcription APIs.
+
+QUESTION 47: How does video-recorder.tsx display real-time preview streams to candidates?
+- File Reference: src/components/interview/video-recorder.tsx
+- Why Interviewer Asks It: Tests HTML5 video preview rendering.
+- Strong Answer:
+  It assigns the browser's active `MediaStream` object directly to the `srcObject` property of a React `<video>` reference element.
+
+QUESTION 48: How is the dynamic progress wheel rendered reactively in ReadinessScore.tsx?
+- File Reference: src/components/landing/ReadinessScore.tsx
+- Why Interviewer Asks It: Tests SVG styling transformations in react components.
+- Strong Answer:
+  It calculates an SVG stroke dashoffset based on the readiness score (e.g. mapping 0-100 to arc lengths) and animates the transition using CSS or framer-motion.
+
+QUESTION 49: What properties in interview-question.model.ts store candidate response analytics?
+- File Reference: src/models/interview-question.model.ts
+- Why Interviewer Asks It: Checks schema metrics structures.
+- Strong Answer:
+  It stores the candidate's transcript text, video reference link, and AI grading parameters: accuracy, confidence, clarity, and overall score.
+
+QUESTION 50: What does the GET request return for a specific coding attempt route?
+- File Reference: src/app/api/coding/[attemptId]/route.ts
+- Why Interviewer Asks It: Tests attempt reporting APIs.
+- Strong Answer:
+  It returns the user's code, compile logs, test cases outcomes, pass percentages, and the AI code review feedback.
+
+
+--------------------------------------------------------------------------------
+                         ADVANCED QUESTIONS
+--------------------------------------------------------------------------------
+
+QUESTION 51: Explain Refresh Token Rotation (RTR). What concurrency issue occurs when a user opens multiple dashboard tabs, and how do we mitigate it?
+- File Reference: src/app/api/auth/refresh-token/route.ts
+- Why Interviewer Asks It: Tests deep security design, API transaction flow, and lock validations.
+- Strong Answer:
+  RTR invalidates the used refresh token and issues a new pair on every refresh. If a user opens 3 tabs concurrently, all 3 might trigger token refreshes. The first request updates the DB. Tabs 2 and 3 present the old refresh token, triggering a reuse detection warning. Mitigation requires implementing a temporary grace period (e.g., 5 seconds) where the old token is still accepted, or synchronization via client-side locks.
+
+QUESTION 52: How does evaluateAnswer() parse unstructured text responses using LLMs to ensure strict JSON adherence?
+- File Reference: src/services/interview-evaluation.service.ts
+- Why Interviewer Asks It: Evaluates production-level prompt engineering and parsing strategies.
+- Strong Answer:
+  We use three mechanisms: (1) System prompts with formatting templates, (2) native json mode parameter options (`response_format: { type: 'json_object' }`), and (3) a low temperature (0.1 - 0.3) for deterministic generation. We also implement fallback regex parsers to strip markdown tags if returned.
+
+QUESTION 53: Explain the difficulty state transitions in the adaptive next question API route. How is difficulty updated after a user response?
+- File Reference: src/app/api/aptitude/[id]/adaptive-next/route.ts
+- Why Interviewer Asks It: Tests state transition design and logic flow execution.
+- Strong Answer:
+  It uses a state transition machine based on correctness: If correct: Easy -> Medium -> Hard -> Hard. If incorrect: Hard -> Medium -> Easy -> Easy. This dynamically adjusts the test complexity based on candidate performance.
+
+QUESTION 54: Explain the routing proxy middleware configuration matcher rules. What routes are excluded, and why?
+- File Reference: src/proxy.ts
+- Why Interviewer Asks It: Tests Next.js middleware execution path mapping.
+- Strong Answer:
+  The matcher configures a regular expression: `/((?!_next/static|_next/image|favicon.ico|.*\.).*)`. This excludes static resources, bundle assets, and favicons from triggering the middleware, optimizing routing latency.
+
+QUESTION 55: Why was the local keyword parser fallback implemented inside the ATS evaluation logic? What are the limitations of local parser algorithms?
+- File Reference: src/services/ats.service.ts
+- Why Interviewer Asks It: Evaluates system design trade-offs between LLMs and local heuristics.
+- Strong Answer:
+  It was implemented to guarantee service availability if the Groq API fails. The limitation is that local parser regexes only perform simple string matching and keyword checks. They lack semantic understanding and cannot evaluate factors like content impact, formatting, or project description strength.
+
+QUESTION 56: How does the Llama code-runner service simulate code execution? What are the limitations compared to a container sandbox like Judge0?
+- File Reference: src/services/code-runner.service.ts
+- Why Interviewer Asks It: Tests understanding of LLM-based compilation simulation vs. sandbox compilers.
+- Strong Answer:
+  It prompts the LLM to trace the code and return stdout/stderr. The limitations are that LLMs can hallucinate logic outputs for complex inputs, cannot guarantee strict execution limits, and are slower than compiled execution in a sandbox.
+
+QUESTION 57: Explain how judgeSubmission() programmatically overrides the AI review when a solution is optimal (passed === total).
+- File Reference: src/services/judge.service.ts
+- Why Interviewer Asks It: Checks understanding of clean data normalization before database writes.
+- Strong Answer:
+  If the test cases pass completely, the code overrides the AI review fields, setting `edgeCasesMissing` and `improvements` to empty arrays and the comment to 'Your solution is optimal.' This overrides conversational suggestions.
+
+QUESTION 58: Explain how verifyAccessToken() decodes access tokens. Why does it use generic typings (`<T extends object>`)?
+- File Reference: src/lib/jwt.ts
+- Why Interviewer Asks It: Tests type safety practices and generic definitions in TypeScript.
+- Strong Answer:
+  It genericizes the signature verification callback `verifyAccessToken<T>(token)`. This allows callers to specify custom payload interfaces (e.g. `JWTPayload`) when parsing user identities.
+
+QUESTION 59: How is email verification token expiration validated inside the database?
+- File Reference: src/app/api/auth/verify-email/route.ts
+- Why Interviewer Asks It: Checks security lifecycle validation schemas.
+- Strong Answer:
+  It retrieves the User document using the token, checks if `verificationTokenExpiry` exists, and verifies it is in the future. If expired, it rejects the verification check.
+
+QUESTION 60: Explain the final scoring and test aggregation logic executed when a candidate submits their coding round.
+- File Reference: src/app/api/coding/round/[roundId]/submit-round/route.ts
+- Why Interviewer Asks It: Tests core scoring models calculations.
+- Strong Answer:
+  It calculates the average correctness score across all attempted questions, updates the `CodingRoundAttempt` status to 'completed', and records total elapsed test time.
+
+QUESTION 61: How does pdf-parser.service.ts handle issues with scanned PDFs that contain only image content?
+- File Reference: src/services/pdf-parser.service.ts
+- Why Interviewer Asks It: Tests input file handling limits.
+- Strong Answer:
+  Scanned PDFs contain no digital text, so `pdf-parse` returns an empty string. The system intercepts this condition and returns an error suggestion advising the user to upload a text-based resume.
+
+QUESTION 62: How does audio-recorder.tsx manage browser media permissions dynamically?
+- File Reference: src/components/interview/audio-recorder.tsx
+- Why Interviewer Asks It: Checks HTML5 devices access permissions flow.
+- Strong Answer:
+  It invokes `getUserMedia` inside a try-catch block. If permissions are denied, it catches the exception and updates the UI state to show permission warnings.
+
+QUESTION 63: How is the total score computed dynamically upon test completion in aptitude attempts?
+- File Reference: src/models/aptitude-attempt.model.ts
+- Why Interviewer Asks It: Checks aggregation and math calculations.
+- Strong Answer:
+  It aggregates correct selections, calculates the percentage score, updates the attempt status, and flags areas of weakness.
+
+QUESTION 64: What security risks exist when returning user-existence confirmations in forgot-password API routes?
+- File Reference: src/app/api/auth/forgot-password/route.ts
+- Why Interviewer Asks It: Tests user enumeration security mitigations.
+- Strong Answer:
+  If the API returns 'User does not exist', attackers can query the database to verify registrations. To mitigate this, the API should return a generic success message regardless of whether the email exists.
+
+QUESTION 65: How does interview-analytics.service.ts aggregate data to display trend charts on user dashboards?
+- File Reference: src/services/interview-analytics.service.ts
+- Why Interviewer Asks It: Tests query aggregations logic.
+- Strong Answer:
+  It executes MongoDB aggregation pipelines to group attempts by date and calculate average values for communication, clarity, and confidence.
+
+QUESTION 66: What optimization prevents AIRecommendations.tsx from calling the recommendations API unnecessarily?
+- File Reference: src/components/landing/AIRecommendations.tsx
+- Why Interviewer Asks It: Tests component rendering performance improvements.
+- Strong Answer:
+  It checks if the current profile data matches cached recommendations. It also uses React state boundaries to skip fetches on minor profile modifications.
+
+QUESTION 67: Why was bcryptjs chosen over native crypto modules for password hashing?
+- File Reference: src/lib/bcrypt.ts
+- Why Interviewer Asks It: Checks cryptographic utility considerations.
+- Strong Answer:
+  bcryptjs is a pure JavaScript implementation that requires no native dependencies, ensuring platform compatibility and ease of deployment across serverless environments.
+
+QUESTION 68: Explain how submit-question/ isolates and evaluates a single coding question within a test round.
+- File Reference: src/app/api/coding/round/[roundId]/submit-question/route.ts
+- Why Interviewer Asks It: Checks state updates within arrays.
+- Strong Answer:
+  It executes the code, matches standard output structures, updates the subdocument score inside the `CodingRoundAttempt` questions array, and persists the draft.
+
+QUESTION 69: How are missing keywords extracted during job description comparisons?
+- File Reference: src/services/ats.service.ts
+- Why Interviewer Asks It: Checks keyword parsing logic.
+- Strong Answer:
+  The prompt instructs the LLM to extract key requirements from the job description and compare them against the resume skills, listing missing keywords in the JSON response.
+
+QUESTION 70: Why is question-bank.ts kept as a static module fallback in memory?
+- File Reference: src/services/aptitude/question-bank.ts
+- Why Interviewer Asks It: Tests backup state structures design.
+- Strong Answer:
+  Keeping it as a static array in memory provides a fast, zero-query fallback for questions if the database is unreachable or the LLM is rate-limited.
+
+
+--------------------------------------------------------------------------------
+                         SYSTEM DESIGN ROUND
+--------------------------------------------------------------------------------
+
+QUESTION 71: If our platform grows to 100,000 active interview sessions per day, how would you scale the audio/video upload and speech-to-text transcription flows?
+- File Reference: src/app/api/interviews/upload-audio/route.ts
+- Why Interviewer Asks It: Evaluates systems scaling, microservices decoupling, and queueing theories.
+- Strong Answer:
+  I would decouple the upload from the transcription. The client requests a presigned upload URL, uploads the file directly to object storage, which then triggers an event notification to a message queue. Dedicated worker instances pull from the queue to process transcriptions asynchronously.
+
+QUESTION 72: Why was MongoDB chosen for Reheasa? If we need to perform complex aggregations across 50,000 users, how does this schema hold up, and what optimizations would you recommend?
+- File Reference: src/models/interview.model.ts & src/models/User.ts
+- Why Interviewer Asks It: Evaluates NoSQL scaling trade-offs and analytical query designs.
+- Strong Answer:
+  MongoDB is optimal for flexible document schemas. However, complex joins can be slow. To scale, we can implement read-write segregation, mirror data to a relational warehouse, or pre-aggregate daily statistics using background cron jobs.
+
+QUESTION 73: Explain how you would design a sandboxed code execution environment if we migrated from Llama simulation to a containerized solution.
+- File Reference: src/services/judge.service.ts
+- Why Interviewer Asks It: Tests sandbox container environment design knowledge.
+- Strong Answer:
+  I would set up a cluster of isolated Docker containers. A queue worker picks up submissions, runs the code inside a container with resource limits (e.g. CPU, RAM, disk write limits), and returns the execution outputs.
+
+QUESTION 74: How would you scale the rate limiter to support millions of requests per second across a global server cluster?
+- File Reference: src/lib/rateLimit.ts
+- Why Interviewer Asks It: Tests scaling rate limiters via caching layers.
+- Strong Answer:
+  I would migrate the rate-limiting store from MongoDB to Redis. Redis runs in-memory and supports fast sliding window operations using sorted sets (`ZADD`), keeping latency minimal.
+
+QUESTION 75: How would you design a session dashboard tracking active logged-in devices using the User schema refreshTokens array?
+- File Reference: src/app/api/auth/refresh-token/route.ts
+- Why Interviewer Asks It: Tests session management schema scaling designs.
+- Strong Answer:
+  I would log metadata (user agent, IP address, creation and active times) with each token. A dashboard UI fetches this array and calls the logout endpoint to invalidate specific session hashes in MongoDB.
+
+QUESTION 76: Cloudinary has storage caps. How would you design an archival pipeline for videos over 30 days old to reduce hosting costs?
+- File Reference: src/services/cloudinary.service.ts
+- Why Interviewer Asks It: Checks file archiving systems scaling.
+- Strong Answer:
+  I would run a nightly cron job that queries MongoDB for completed interviews older than 30 days, downloads the video files, writes them to a cheaper cold storage bucket (e.g. AWS S3 Glacier), and deletes the Cloudinary assets.
+
+QUESTION 77: How would you scale question generation if multiple users started tests concurrently, causing LLM rate limits?
+- File Reference: src/app/api/aptitude/create/route.ts
+- Why Interviewer Asks It: Tests caching and pre-generation design strategies.
+- Strong Answer:
+  I would decouple generation by pre-generating a large pool of questions for categories and difficulties using background cron jobs, and seeding tests from this pre-populated database pool instead of querying the LLM synchronously.
+
+QUESTION 78: How would you design a real-time matching service comparing resumes against job listings as users scroll through a job board?
+- File Reference: src/services/ats.service.ts
+- Why Interviewer Asks It: Tests real-time scoring data pipeline designs.
+- Strong Answer:
+  I would pre-calculate and index vector embeddings for all resumes and job listings using vector databases (like Pinecone or pgvector), allowing fast similarity lookups.
+
+QUESTION 79: If the Next.js middleware proxy becomes a bottleneck, how would you design edge routing to improve response speeds?
+- File Reference: src/proxy.ts
+- Why Interviewer Asks It: Tests edge network routing implementations.
+- Strong Answer:
+  I would deploy the routing proxy logic directly on CDN edge workers (like Cloudflare Workers). This verifies headers and token validity close to the user, reducing round-trip latency.
+
+QUESTION 80: AI evaluation returns structured data. If a user loses connection mid-interview, how do you prevent data loss?
+- File Reference: src/services/interview-evaluation.service.ts
+- Why Interviewer Asks It: Tests resilient state synchronization design patterns.
+- Strong Answer:
+  I would implement autosaving on the client side. Responses are stored in IndexedDB/localStorage. If connection is lost, the client attempts to upload cached responses once the connection is restored.
+
+
+--------------------------------------------------------------------------------
+                         DEBUGGING ROUND
+--------------------------------------------------------------------------------
+
+QUESTION 81: Users report that uploading a PDF resume with many pages (e.g. 50 pages) causes the container instance to crash with an Out Of Memory (OOM) error. How would you debug and fix this?
+- File Reference: src/services/pdf-parser.service.ts
+- Why Interviewer Asks It: Tests troubleshooting skills for memory leaks and resource limits.
+- Strong Answer:
+  I would profile the memory heap using standard Node.js inspection flags (`--inspect`) and generate heap dumps before and after the upload. The library `pdf-parse` loads the entire file binary buffer into memory, which can scale exponentially with large documents. Fix: (1) Implement a request validation rule checking the file size (e.g., limit to 2MB) and count page metrics before full extraction. (2) Offload the file parsing to a separate worker thread or process queue so that main Web router containers do not crash, preserving overall system availability.
+
+QUESTION 82: In the Coding round screen, typing a single character causes the entire page UI to freeze, indicating a React infinite re-render loop. What is the cause of this, and how would you debug the state hook bindings?
+- File Reference: src/components/coding/CodeEditor.tsx
+- Why Interviewer Asks It: Focuses on React performance, component cycles, and prop comparisons.
+- Strong Answer:
+  Cause: This happens when the CodeEditor component triggers an `onChange` event, updating a parent state variable. If that parent state variable passes a newly constructed object reference or array as a prop back to the editor, the editor detects it as a new value, triggers a value update, fires `onChange` again, and loops infinitely. Debug: Use React DevTools Profiler to track what component triggers the render. Inspect hooks dependencies. Fix: Memoize callbacks using `useCallback()`, keep states simple (strings, not objects), and use `useRef` for tracking Monaco editor instance states to avoid re-rendering.
+
+QUESTION 83: A developer reports that in production, MongoDB logs show 'Too many connections' and the database rejects queries. What is the cause?
+- File Reference: src/lib/db.ts
+- Why Interviewer Asks It: Checks connection leaks troubleshooting.
+- Strong Answer:
+  The cause is typically failing to cache connection pools in serverless Next.js route files. If files define a local `mongoose.connect()` connection call instead of checking the cached connection, every invocation spawns a new connection pool instance. Fix: Ensure all route queries import and await `dbConnect()` from `src/lib/db.ts` to reuse the cached pool.
+
+QUESTION 84: Users report getting randomly logged out when navigating between tabs. The logs show 'Invalid session or token reuse detected'. How do you troubleshoot this?
+- File Reference: src/app/api/auth/refresh-token/route.ts
+- Why Interviewer Asks It: Checks token rotation synchronization debugging.
+- Strong Answer:
+  I would check the network logs to see if multiple tabs are requesting refreshes concurrently. If tab 1 refreshes the token, the database updates. If tab 2 sends the old token before updating its local state, it triggers the token reuse alert. Fix: Trace cookie updates and synchronize token requests across tabs using BroadcastChannel or page focus events.
+
+QUESTION 85: Cloudinary media uploads fail with a 'Signature verification failed' error. What is the cause, and how do you resolve it?
+- File Reference: src/services/cloudinary.service.ts
+- Why Interviewer Asks It: Tests integration credentials debugging.
+- Strong Answer:
+  This indicates that Cloudinary API credentials (API key, API secret, cloud name) are incorrect or missing from env variables. Fix: Check server environment settings, verify the API secret is parsed correctly, and ensure they match the credentials in the Cloudinary console.
+
+QUESTION 86: A user reports that their resume ATS score is 0, but they have projects and experience. What is the cause?
+- File Reference: src/services/ats.service.ts
+- Why Interviewer Asks It: Checks resume data extraction parsing errors.
+- Strong Answer:
+  This occurs if the resume text extraction fails or returns blank, causing the parser to output empty arrays. Fix: Add debug logs to print the parsed text, verify the PDF has copyable text, and ensure the schema parsing gracefully handles empty fields.
+
+QUESTION 87: During mock interviews, users report that the audio recorder doesn't capture sound, and logs show 'DOMException: Requested device not found'. How do you debug this?
+- File Reference: src/components/interview/audio-recorder.tsx
+- Why Interviewer Asks It: Tests user hardware integrations debugging.
+- Strong Answer:
+  This occurs if the browser has no audio input device (microphone) connected or if access is blocked by browser permissions. Fix: Add validation checks to verify available devices using `navigator.mediaDevices.enumerateDevices()` before starting the recorder.
+
+QUESTION 88: The login API is taking 10+ seconds to respond, causing request timeouts. How would you diagnose this bottleneck?
+- File Reference: src/app/api/auth/login/route.ts
+- Why Interviewer Asks It: Tests database query bottlenecks debugging.
+- Strong Answer:
+  I would check query execution times using MongoDB database profiling. A slow lookup on email or username indicates a missing index. Fix: Verify that the `email` and `username` fields in `src/models/User.ts` have `unique: true` and index configurations enabled.
+
+QUESTION 89: Mutative API requests (POST/PUT) work fine on localhost but fail with a 403 status in production. What is the cause?
+- File Reference: src/proxy.ts
+- Why Interviewer Asks It: Tests production environment configurations debugging.
+- Strong Answer:
+  The proxy middleware's CSRF check compares the request origin against the host. In production, proxy setups (like Nginx or Vercel routing) can rewrite headers, causing mismatches. Fix: Log the origin, referer, and host headers to verify alignment.
+
+QUESTION 90: The coding compiler simulator returns 'JSON parsing error: Unexpected token <'. What is the cause?
+- File Reference: src/services/judge.service.ts
+- Why Interviewer Asks It: Checks parsing errors from LLM APIs.
+- Strong Answer:
+  This occurs when the LLM outputs HTML tags (like `<` or markdown warnings) instead of clean JSON. Fix: Update prompt rules to restrict output, and implement robust string cleanups before calling `JSON.parse`.
+
+
+--------------------------------------------------------------------------------
+                         BEHAVIORAL ROUND
+--------------------------------------------------------------------------------
+
+QUESTION 91: You decided to use Groq Llama-3-70b versatility models for resume ATS checks and code simulations. What were the latency, cost, and accuracy trade-offs you considered, and how did you resolve them?
+- File Reference: src/services/interview-evaluation.service.ts
+- Why Interviewer Asks It: Evaluates ownership, pragmatism, financial engineering, and product-level thinking.
+- Strong Answer:
+  Latency: Running LLM completions on 70B models can take up to 2-3 seconds, which is a bottleneck for active UI dashboards. Cost: Commercial APIs like OpenAI GPT-4 are expensive for student practice runs. Resolution: We utilized Groq, which offers high-speed execution at a fraction of the cost. We designed UI skeletons and loaders to handle the 2-second wait. We also implemented local, offline fallbacks (local ATS scoring and simple regex skills parsers) to guarantee service even if APIs are down or cost limits are reached.
+
+QUESTION 92: Describe a situation where you had to upgrade the authentication security of Reheasa without logging out active users. How did you plan it?
+- File Reference: src/app/api/auth/refresh-token/route.ts
+- Why Interviewer Asks It: Focuses on risk management, backward compatibility, and execution planning.
+- Strong Answer:
+  Problem: We upgraded the database to store refresh token hashes rather than plain text tokens. If we simply deployed this, all active user tokens would fail validation, logging out every active user simultaneously. Plan/Resolution: We implemented a zero-downtime migration check in the refresh endpoint. The server checks the token prefix: if it is a bcrypt hash, it compares using bcrypt; if it is plain text, it does an exact string match. Once verified, RTR takes over, rotates the token, and writes a new hashed token to the DB, silently migrating sessions on the fly.
+
+QUESTION 93: How did you handle the situation when a team member suggested using an online sandbox execution environment instead of AI compilation simulation for code submissions?
+- File Reference: src/services/judge.service.ts
+- Why Interviewer Asks It: Tests team alignment and compromise management.
+- Strong Answer:
+  I acknowledged the benefits of sandbox container runtimes (absolute correctness, safety limits). However, setting up compiler clusters increases complexity, costs, and infrastructure dependencies. We compromised by using the AI compilation simulator as the primary interface wrapper, while structuring the compiler service with an abstract interface to allow swap-ins of actual sandbox API runners (like Judge0) as we scale.
+
+QUESTION 94: Why did you choose to use Cloudinary for video hosting rather than self-hosting media assets on your server?
+- File Reference: src/services/cloudinary.service.ts
+- Why Interviewer Asks It: Checks pragmatic infrastructure selection.
+- Strong Answer:
+  Self-hosting media requires high bandwidth, disk storage, and complex video encoding. Cloudinary offloads this processing. This saved us weeks of development time, allowing us to focus on the core AI evaluation tools.
+
+QUESTION 95: Explain why you chose a custom proxy middleware solution rather than implementing a third-party auth service like NextAuth or Auth0.
+- File Reference: src/proxy.ts
+- Why Interviewer Asks It: Tests technical stack decision ownership.
+- Strong Answer:
+  Third-party services are powerful but add dependencies and can lock user session data behind external configurations. Implementing custom proxy middlewares using JWTs gave us full control over RTR, custom database session indexing, and zero-downtime password invalidation migrations.
+
+QUESTION 96: Describe a challenge you faced when integrating Monaco Editor in React, and how you resolved it.
+- File Reference: src/components/coding/CodeEditor.tsx
+- Why Interviewer Asks It: Checks frontend integration problem-solving.
+- Strong Answer:
+  Integrating Monaco caused page bundle sizes to grow significantly, slow page loads, and layout shifts during rendering. I resolved this by utilizing lazy loading imports for Monaco and rendering loading skeletons to maintain UI stability.
+
+QUESTION 97: What design trade-offs did you make when building the adaptive test algorithm? What would you improve?
+- File Reference: src/app/api/aptitude/[id]/adaptive-next/route.ts
+- Why Interviewer Asks It: Checks incremental design iterations ownership.
+- Strong Answer:
+  Trade-off: We chose a simple 3-stage difficulty state transition matrix. This is easy to test and run, but does not calculate exact skill ratings (like Item Response Theory). For future improvements, I would implement actual probability models to dynamically estimate skill levels.
+
+QUESTION 98: How did you validate that user resume uploads do not contain malicious executable files disguised as PDFs?
+- File Reference: src/services/resume-parser.service.ts
+- Why Interviewer Asks It: Tests security ownership and defensive validation.
+- Strong Answer:
+  We implemented two checks: (1) Client-side Dropzone restrictions, (2) Server-side validation of file extension metadata. We also parse binary content using `pdf-parse` without saving the file on local disk, neutralizing executable code runs.
+
+QUESTION 99: What were the design goals behind the global state structures in Reheasa?
+- File Reference: src/context/AuthContext.tsx
+- Why Interviewer Asks It: Tests component architecture design ownership.
+- Strong Answer:
+  The goal was to build a clean dashboard layout where sidebars, analytics charts, and testing modules adapt dynamically. Keeping auth states centralized in `AuthContext` provides a clean interface for checking access.
+
+QUESTION 100: Why did you implement IP-based rate limiting on auth endpoints, and what feedback did you receive from security audits?
+- File Reference: src/lib/rateLimit.ts
+- Why Interviewer Asks It: Tests security integration and defense-in-depth strategies.
+- Strong Answer:
+  We implemented rate limiting on login, signup, and reset routes to prevent brute-force attacks. The audit validated this, and we improved it by adding client IP detection logic to prevent bypasses via proxy headers.
+
+================================================================================

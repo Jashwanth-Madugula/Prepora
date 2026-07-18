@@ -1,6 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+
+/**
+ * @file src/app/dashboard/dsa/page.tsx
+ * @category Utility / Helper
+ *
+ * Why this code exists:
+ * 
+ * 
+ *
+ * What problem it solves:
+ * - 
+ *
+ * How it works internally:
+ * - 
+ */
+
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Code,
@@ -99,6 +115,38 @@ export default function DSADashboardPage() {
     { name: "Meta", description: "Meta production engineer and generalist coding interviews.", difficulty: "Hard" },
   ];
 
+  const [attempts, setAttempts] = useState<any[]>([]);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const res = await fetch("/api/coding");
+        const data = await res.json();
+        if (data.success) {
+          setAttempts(data.attempts || []);
+        } else {
+          toast.error("Failed to load attempts history.");
+        }
+      } catch (err) {
+        console.error("Load history error:", err);
+      } finally {
+        setFetching(false);
+      }
+    }
+    loadHistory();
+  }, []);
+
+  const dsaAttempts = attempts.filter(
+    (a) =>
+      a.questionId?.topic &&
+      topics.some(
+        (t) =>
+          a.questionId.topic.toLowerCase() === t.name.toLowerCase() ||
+          a.questionId.topic.toLowerCase().includes(t.name.toLowerCase())
+      )
+  );
+
   const handleStartRound = async () => {
     if (!selectedTopic && !selectedCompany) {
       toast.error("Please select a DSA topic or a target company first.");
@@ -169,6 +217,19 @@ export default function DSADashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {topics.map((topic) => {
                 const isSelected = selectedTopic === topic.name;
+                const topicAttempts = attempts.filter(
+                  (a) =>
+                    a.status === "submitted" &&
+                    a.questionId?.topic &&
+                    (a.questionId.topic.toLowerCase() === topic.name.toLowerCase() ||
+                     a.questionId.topic.toLowerCase().includes(topic.name.toLowerCase()))
+                );
+                const solvedCount = topicAttempts.length;
+                const avgScore =
+                  solvedCount > 0
+                    ? Math.round(topicAttempts.reduce((acc, a) => acc + (a.score || 0), 0) / solvedCount)
+                    : 0;
+
                 return (
                   <button
                     key={topic.name}
@@ -185,11 +246,21 @@ export default function DSADashboardPage() {
                     <div className="shrink-0 p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl max-h-[48px] flex items-center justify-center">
                       {topic.icon}
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-sm text-zinc-900 dark:text-white">{topic.name}</h3>
-                      <p className="text-xs text-zinc-550 dark:text-zinc-400 mt-1 leading-relaxed">
+                      <p className="text-xs text-zinc-550 dark:text-zinc-400 mt-1 leading-relaxed line-clamp-2">
                         {topic.description}
                       </p>
+                      <div className="flex gap-2 mt-2 text-[10px] font-bold text-zinc-450 dark:text-zinc-500">
+                        <span className="bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-650 dark:text-zinc-400">
+                          {solvedCount} Solved
+                        </span>
+                        {solvedCount > 0 && (
+                          <span className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 px-2 py-0.5 rounded">
+                            {avgScore}% Avg Score
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );
@@ -333,6 +404,117 @@ export default function DSADashboardPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* History attempts list */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-6 shadow-sm mt-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-zinc-150 dark:border-zinc-800/80 pb-4">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-zinc-500" />
+            DSA Assessment History
+          </h2>
+        </div>
+
+        {fetching ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3 text-zinc-400">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <p className="text-sm">Fetching DSA history...</p>
+          </div>
+        ) : dsaAttempts.length === 0 ? (
+          <div className="text-center py-10 text-zinc-400">
+            <Code className="w-12 h-12 mx-auto mb-3 opacity-55" />
+            <p className="text-sm">No DSA attempts recorded yet. Launch your first topic-wise assessment above!</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-400 font-semibold text-xs uppercase">
+                  <th className="pb-3 pr-4">Date</th>
+                  <th className="pb-3 pr-4">DSA Topic</th>
+                  <th className="pb-3 pr-4">Question Title</th>
+                  <th className="pb-3 pr-4">Difficulty</th>
+                  <th className="pb-3 pr-4">Language</th>
+                  <th className="pb-3 pr-4">Score</th>
+                  <th className="pb-3 pr-4">Status</th>
+                  <th className="pb-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-150 dark:divide-zinc-850">
+                {dsaAttempts.map((attempt) => {
+                  const dateStr = new Date(attempt.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  });
+                  const title = attempt.questionId?.title || "Unknown Question";
+                  const topic = attempt.questionId?.topic || "General";
+                  const difficulty = attempt.questionId?.difficulty || "medium";
+                  const status = attempt.status;
+
+                  return (
+                    <tr key={attempt._id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/10">
+                      <td className="py-4 pr-4 text-zinc-500 font-medium whitespace-nowrap">{dateStr}</td>
+                      <td className="py-4 pr-4">
+                        <span className="font-bold text-[10px] uppercase bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-700 dark:text-zinc-300 border border-zinc-200/30 dark:border-zinc-700/30">
+                          {topic}
+                        </span>
+                      </td>
+                      <td className="py-4 pr-4 font-semibold text-zinc-850 dark:text-zinc-200">{title}</td>
+                      <td className="py-4 pr-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            difficulty === "easy"
+                              ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400"
+                              : difficulty === "medium"
+                              ? "bg-indigo-50 text-indigo-750 dark:bg-indigo-950/30 dark:text-indigo-400"
+                              : "bg-purple-50 text-purple-750 dark:bg-purple-950/30 dark:text-purple-400"
+                          }`}
+                        >
+                          {difficulty}
+                        </span>
+                      </td>
+                      <td className="py-4 pr-4 text-zinc-650 dark:text-zinc-350 capitalize whitespace-nowrap text-xs">
+                        {attempt.language || "-"}
+                      </td>
+                      <td className="py-4 pr-4 font-bold">
+                        {status === "submitted" ? `${attempt.score}/100` : "-"}
+                      </td>
+                      <td className="py-4 pr-4 whitespace-nowrap">
+                        {status === "submitted" ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400">
+                            Completed
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400 animate-pulse">
+                            In Progress
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 text-right whitespace-nowrap">
+                        {status === "in_progress" ? (
+                          <button
+                            onClick={() => router.push(`/dashboard/coding/${attempt._id}`)}
+                            className="inline-block px-3 py-1.5 rounded-lg text-xs bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-100 font-semibold cursor-pointer"
+                          >
+                            Resume
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => router.push(`/dashboard/coding/${attempt._id}`)}
+                            className="inline-block px-3 py-1.5 rounded-lg text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 font-semibold text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                          >
+                            Review AI Feedback
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

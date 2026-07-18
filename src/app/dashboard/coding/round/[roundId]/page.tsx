@@ -1,5 +1,21 @@
 "use client";
 
+
+/**
+ * @file src/app/dashboard/coding/round/[roundId]/page.tsx
+ * @category Utility / Helper
+ *
+ * Why this code exists:
+ * 
+ * 
+ *
+ * What problem it solves:
+ * - 
+ *
+ * How it works internally:
+ * - 
+ */
+
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Editor from "@monaco-editor/react";
@@ -132,6 +148,19 @@ public class Main {
 }`
 };
 
+const getStarterCode = (question: any, lang: string): string => {
+  if (!question || !question.starterCode) return DEFAULT_STARTER_CODE[lang] || "";
+  let code = "";
+  if (question.starterCode instanceof Map) {
+    code = question.starterCode.get(lang);
+  } else if (typeof question.starterCode.get === "function") {
+    code = question.starterCode.get(lang);
+  } else {
+    code = question.starterCode[lang];
+  }
+  return code || DEFAULT_STARTER_CODE[lang] || "";
+};
+
 export default function CodingRoundWorkspacePage() {
   const router = useRouter();
   const { roundId } = useParams() as { roundId: string };
@@ -204,7 +233,19 @@ export default function CodingRoundWorkspacePage() {
           
           const defaultLangs = att.questions.map(q => q.language || "javascript");
           setSelectedLanguages(defaultLangs);
-          setCodes(att.questions.map((q, idx) => q.code || DEFAULT_STARTER_CODE[defaultLangs[idx]] || ""));
+          setCodes(att.questions.map((q, idx) => q.code || getStarterCode(q.questionId, defaultLangs[idx])));
+
+          // Initialize console outputs if already submitted
+          const initialConsoles = att.questions.map(q => {
+            if (q.score > 0 || q.passedCases > 0 || q.totalCases > 0) {
+              return {
+                passedCases: q.passedCases,
+                totalCases: q.totalCases,
+              };
+            }
+            return null;
+          });
+          setConsoleOutputs(initialConsoles);
 
           // Calculate elapsed time from creation
           const start = new Date(att.createdAt).getTime();
@@ -260,16 +301,34 @@ export default function CodingRoundWorkspacePage() {
   const consoleOutput = consoleOutputs[activeQuestionIdx];
 
   const handleLanguageChange = (lang: string) => {
+    const prevLang = selectedLanguages[activeQuestionIdx];
     const nextLangs = [...selectedLanguages];
     nextLangs[activeQuestionIdx] = lang;
     setSelectedLanguages(nextLangs);
 
     const nextCodes = [...codes];
-    // Populate starter code if empty
-    if (!nextCodes[activeQuestionIdx] || nextCodes[activeQuestionIdx].trim() === "" || Object.values(DEFAULT_STARTER_CODE).includes(nextCodes[activeQuestionIdx])) {
-      nextCodes[activeQuestionIdx] = DEFAULT_STARTER_CODE[lang] || "";
+    const prevStarter = getStarterCode(activeQuestion, prevLang);
+    const isUnmodified = !nextCodes[activeQuestionIdx] || 
+                         nextCodes[activeQuestionIdx].trim() === "" || 
+                         nextCodes[activeQuestionIdx] === prevStarter ||
+                         nextCodes[activeQuestionIdx] === DEFAULT_STARTER_CODE[prevLang] ||
+                         Object.values(DEFAULT_STARTER_CODE).includes(nextCodes[activeQuestionIdx]);
+
+    if (isUnmodified) {
+      nextCodes[activeQuestionIdx] = getStarterCode(activeQuestion, lang);
     }
     setCodes(nextCodes);
+  };
+
+  const handleResetCode = () => {
+    if (overallSubmitted || !activeQuestion) return;
+    const confirmReset = window.confirm("Reset editor to starter code skeleton? Your written draft will be overwritten.");
+    if (confirmReset) {
+      const nextCodes = [...codes];
+      nextCodes[activeQuestionIdx] = getStarterCode(activeQuestion, selectedLanguage);
+      setCodes(nextCodes);
+      toast.success("Code reset completed.");
+    }
   };
 
   const handleCodeChange = (val: string | undefined) => {
@@ -458,19 +517,23 @@ export default function CodingRoundWorkspacePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          questionDescription: activeQuestion.description,
-          codeDraft: code,
+          question: activeQuestion.description,
+          code,
           language: selectedLanguage,
         }),
       });
       const data = await res.json();
-      if (data.success && data.hints) {
+      if (data.success && data.hint) {
         const nextHints = [...hintsCache];
-        nextHints[activeQuestionIdx] = data.hints;
+        nextHints[activeQuestionIdx] = [data.hint];
         setHintsCache(nextHints);
+        toast.success("AI Hint generated!");
+      } else {
+        toast.error("Failed to generate hint.");
       }
     } catch (err) {
       console.error("Get hints error:", err);
+      toast.error("An error occurred fetching hints.");
     } finally {
       const nextLoadings = [...hintsLoading];
       nextLoadings[activeQuestionIdx] = false;
@@ -488,8 +551,7 @@ export default function CodingRoundWorkspacePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          questionDescription: activeQuestion.description,
-          codeDraft: code,
+          code,
           language: selectedLanguage,
         }),
       });
@@ -498,9 +560,13 @@ export default function CodingRoundWorkspacePage() {
         const nextExplains = [...explainCache];
         nextExplains[activeQuestionIdx] = data.explanation;
         setExplainCache(nextExplains);
+        toast.success("AI Code explanation completed!");
+      } else {
+        toast.error("Failed to explain solution.");
       }
     } catch (err) {
       console.error("Get explanation error:", err);
+      toast.error("An error occurred explaining the code.");
     } finally {
       const nextLoadings = [...explainLoading];
       nextLoadings[activeQuestionIdx] = false;
@@ -903,14 +969,24 @@ export default function CodingRoundWorkspacePage() {
             
             <div className="flex items-center gap-2">
               {!overallSubmitted && (
-                <button
-                  onClick={() => handleSaveDraft(false)}
-                  className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                  title="Save Draft Code"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  Save Draft
-                </button>
+                <>
+                  <button
+                    onClick={handleResetCode}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-850 text-zinc-650 dark:text-zinc-350 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    title="Reset to Starter Code"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Reset Code
+                  </button>
+                  <button
+                    onClick={() => handleSaveDraft(false)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    title="Save Draft Code"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    Save Draft
+                  </button>
+                </>
               )}
             </div>
           </div>

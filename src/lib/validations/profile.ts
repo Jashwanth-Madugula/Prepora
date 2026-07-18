@@ -1,3 +1,18 @@
+/**
+ * @file src/lib/validations/profile.ts
+ * @category Zod Input Validator Schema
+ *
+ * Why this code exists:
+ * Defines runtime validation checks and type constraints for user input parameters.
+ * 
+ *
+ * What problem it solves:
+ * - Validates client form inputs and endpoint request payloads on the server to prevent bad inputs or injection attacks, maintaining strict type compliance.
+ *
+ * How it works internally:
+ * - Defines schema definitions using Zod's validation builder API and exports them for form verification (via React Hook Form) and route request validation checks.
+ */
+
 import { z } from "zod";
 
 export const profileSchema = z.object({

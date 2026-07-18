@@ -1,5 +1,21 @@
 "use client";
 
+
+/**
+ * @file src/components/landing/ReadinessScore.tsx
+ * @category React UI Component
+ *
+ * Why this code exists:
+ * Renders a visual UI element or widget inside the candidate's application view.
+ * 
+ *
+ * What problem it solves:
+ * - Constructs modular, interactive interface components (like forms, buttons, timers, code-editors) keeping state reactive and responsive to candidate interactions.
+ *
+ * How it works internally:
+ * - Implements a TypeScript React function component combining Tailwind CSS styling, React hooks (useState, useEffect, useMemo), animations (framer-motion), and callback events.
+ */
+
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Sliders, Sparkles, CheckCircle2 } from "lucide-react";
