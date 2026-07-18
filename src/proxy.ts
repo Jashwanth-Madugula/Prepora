@@ -64,7 +64,8 @@ export async function proxy(request: NextRequest) {
     if (sourceUrl) {
       try {
         const parsedSource = new URL(sourceUrl);
-        const appHost = host ? host.split(":")[0] : "";
+        const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0].trim();
+        const appHost = (forwardedHost || host || "").split(":")[0];
         
         // Block request if origin hostname doesn't match the host header.
         // We exclude localhost and 127.0.0.1 dynamically to facilitate development.

@@ -13,16 +13,16 @@
  * - Exposes async methods and utilities that process input datasets, interface with Mongoose models, and communicate with external services (like Groq, Cloudinary, or Judge0 compilers).
  */
 
-import { PDFParse } from "pdf-parse";
+import pdf from "pdf-parse";
 
 export async function extractPdfText(
   buffer: Buffer
 ): Promise<string> {
-  const parser = new PDFParse({ data: buffer });
   try {
-    const textResult = await parser.getText();
-    return textResult.text || "";
-  } finally {
-    await parser.destroy();
+    const data = await pdf(buffer);
+    return data.text || "";
+  } catch (error) {
+    console.error("Error extracting text from PDF:", error);
+    throw new Error("Failed to parse PDF file. Ensure it is a valid text-based PDF.");
   }
 }

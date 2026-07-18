@@ -23,12 +23,12 @@ const EMAILJS_PRIVATE_KEY = process.env.EMAILJS_PRIVATE_KEY || "";
 const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASS || "";
 
-// Fail fast: make sure at least one email delivery method is configured
+// Check if at least one email delivery method is configured
 const isEmailJSConfigured = !!(EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY && EMAILJS_PRIVATE_KEY);
 const isSmtpConfigured = !!(SMTP_USER && SMTP_PASS);
 
 if (!isEmailJSConfigured && !isSmtpConfigured) {
-  throw new Error("Rehearsa AI mail setup failed: Neither EmailJS nor SMTP credentials are fully configured.");
+  console.warn("WARNING: Rehearsa AI mail setup is not fully configured. Neither EmailJS nor SMTP credentials are set. Email features will fail when invoked.");
 }
 
 // Dynamically determine host and port based on SMTP user configuration
@@ -73,6 +73,7 @@ export async function sendEmailJS({
       accessToken: EMAILJS_PRIVATE_KEY, // EmailJS private key (needed for REST API from backend)
       template_params: {
         to_email,
+        email: to_email, // Fallback in case the EmailJS template uses {{email}}
         ...template_params,
       },
     }),
@@ -96,6 +97,9 @@ export async function sendMail({ to, subject, html }: { to: string; subject: str
 }
 
 export async function sendVerificationEmail(email: string, token: string) {
+  if (!isEmailJSConfigured && !isSmtpConfigured) {
+    throw new Error("Email delivery failed: Neither EmailJS nor SMTP credentials are configured.");
+  }
   const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${token}`;
   
   // Try sending via EmailJS first if environment variables are provided
@@ -133,6 +137,9 @@ export async function sendVerificationEmail(email: string, token: string) {
 }
 
 export async function sendPasswordResetEmail(email: string, token: string) {
+  if (!isEmailJSConfigured && !isSmtpConfigured) {
+    throw new Error("Email delivery failed: Neither EmailJS nor SMTP credentials are configured.");
+  }
   const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${token}`;
   
   // Try sending via EmailJS first if environment variables are provided

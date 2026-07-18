@@ -19,6 +19,7 @@ import { getCurrentUserId } from "@/lib/auth";
 import Groq from "groq-sdk";
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -67,11 +68,8 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Prepare temp folder inside workspace (src/temp)
-    const tempDir = path.join(process.cwd(), "src", "temp");
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
+    // Prepare temp folder inside OS temporary directory
+    const tempDir = os.tmpdir();
 
     tempFilePath = path.join(tempDir, `transcribe-${userId}-${Date.now()}.webm`);
     fs.writeFileSync(tempFilePath, buffer);
