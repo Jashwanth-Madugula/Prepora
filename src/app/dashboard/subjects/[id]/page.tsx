@@ -145,7 +145,7 @@ export default function SubjectQuizPlayPage() {
     setSelectedAnswers(updated);
   };
 
-  const handleAutoSubmit = async (answersToSubmit: string[]) => {
+  async function handleAutoSubmit(answersToSubmit: string[]) {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/subjects/${params.id}/submit`, {
@@ -167,7 +167,7 @@ export default function SubjectQuizPlayPage() {
       setSubmitting(false);
       setShowConfirmModal(false);
     }
-  };
+  }
 
   const handleSubmitQuiz = () => {
     handleAutoSubmit(selectedAnswers);

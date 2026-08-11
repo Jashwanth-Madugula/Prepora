@@ -4,164 +4,100 @@
  *
  * Why this code exists:
  * Defines the database schema structure, validation constraints, and indexing rules for the "interview-question" collection.
- * - Specifically handles AI-powered behavioral and technical mock interview evaluation workflows, question lists generation, or audio/video recording processing.
- *
- * What problem it solves:
- * - Ensures data integrity, field constraints, default values, and relational schemas across the database, preventing corrupt or inconsistent data records from being saved.
- *
- * How it works internally:
- * - Defines a Mongoose Schema configuration specifying fields, types, and options. Registers or retrieves the model from the global mongoose model cache to avoid re-compilation in serverless runtime execution environments.
+ * Supports text, audio, and video interview submissions, 7-dimensional scoring, speech analytics,
+ * RAG concept coverage metrics, and adaptive follow-up questions.
  */
 
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IInterviewQuestion extends Document {
   interviewId: mongoose.Types.ObjectId;
-
   question: string;
-
   category: string;
-
   difficulty: "easy" | "medium" | "hard";
-
   answer?: string;
-
-  // New fields for supporting Audio & Video interview entries
   answerType?: "text" | "audio" | "video";
-
   transcript?: string;
-
   audioUrl?: string;
-
   videoUrl?: string;
-
   feedback?: string;
-
   score?: number;
-
   communicationScore?: number;
-
   technicalAccuracyScore?: number;
-
   confidenceScore?: number;
-
   completenessScore?: number;
-
   structureScore?: number;
-
-  // New communication metrics
   clarityScore?: number;
-
   fluencyScore?: number;
-
+  conceptCoverage?: number;
+  missingConcepts?: string[];
+  incorrectConcepts?: string[];
+  adaptiveFollowUp?: string;
   improvedAnswer?: string;
-
   strengths?: string[];
-
   weaknesses?: string[];
-
   followUps?: string[];
-
-  // Speech analytics fields
   speakingSpeed?: number;
   fillerWordCount?: number;
 }
 
-const InterviewQuestionSchema =
-  new Schema<IInterviewQuestion>(
-    {
-      interviewId: {
-        type: Schema.Types.ObjectId,
-        ref: "Interview",
-        required: true,
-      },
-
-      question: {
-        type: String,
-        required: true,
-      },
-
-      category: {
-        type: String,
-        required: true,
-      },
-
-      difficulty: {
-        type: String,
-        enum: ["easy", "medium", "hard"],
-        default: "medium",
-      },
-
-      answer: String,
-
-      answerType: {
-        type: String,
-        enum: ["text", "audio", "video"],
-        default: "text",
-      },
-
-      transcript: String,
-
-      audioUrl: String,
-
-      videoUrl: String,
-
-      feedback: String,
-
-      score: Number,
-
-      communicationScore: Number,
-
-      technicalAccuracyScore: Number,
-
-      confidenceScore: Number,
-
-      completenessScore: Number,
-
-      structureScore: Number,
-
-      clarityScore: Number,
-
-      fluencyScore: Number,
-
-      improvedAnswer: String,
-
-      strengths: [String],
-
-      weaknesses: [String],
-
-      followUps: [String],
-
-      speakingSpeed: Number,
-
-      fillerWordCount: Number,
+const InterviewQuestionSchema = new Schema<IInterviewQuestion>(
+  {
+    interviewId: {
+      type: Schema.Types.ObjectId,
+      ref: "Interview",
+      required: true,
+      index: true,
     },
-    {
-      timestamps: true,
-    }
-  );
+    question: {
+      type: String,
+      required: true,
+    },
+    category: {
+      type: String,
+      required: true,
+    },
+    difficulty: {
+      type: String,
+      enum: ["easy", "medium", "hard"],
+      default: "medium",
+    },
+    answer: String,
+    answerType: {
+      type: String,
+      enum: ["text", "audio", "video"],
+      default: "text",
+    },
+    transcript: String,
+    audioUrl: String,
+    videoUrl: String,
+    feedback: String,
+    score: Number,
+    communicationScore: Number,
+    technicalAccuracyScore: Number,
+    confidenceScore: Number,
+    completenessScore: Number,
+    structureScore: Number,
+    clarityScore: Number,
+    fluencyScore: Number,
+    conceptCoverage: Number,
+    missingConcepts: [String],
+    incorrectConcepts: [String],
+    adaptiveFollowUp: String,
+    improvedAnswer: String,
+    strengths: [String],
+    weaknesses: [String],
+    followUps: [String],
+    speakingSpeed: Number,
+    fillerWordCount: Number,
+  },
+  {
+    timestamps: true,
+  }
+);
 
 export default mongoose.models.InterviewQuestion ||
   mongoose.model<IInterviewQuestion>(
     "InterviewQuestion",
     InterviewQuestionSchema
   );
-
-/**
- * FILE PURPOSE & HELP:
- * This model defines the schema for individual questions mapped to a specific interview session.
- * It has been updated to support the Audio & Video Interview System by including:
- * - `answerType`: Specifies the submission format ("text", "audio", or "video").
- * - `transcript`: Stashes the speech-to-text representation generated by Groq Whisper from candidate audio/video recordings.
- * - `audioUrl` & `videoUrl`: References the secure media URLs generated after uploading the recorded Blobs to Cloudinary.
- *
- * It also supports granular AI evaluation metrics across 7 dimensions:
- * - Technical Accuracy, Communication, Confidence, Completeness, Structure (original 5 metrics)
- * - Clarity and Fluency (new metrics added for advanced speech analysis in Phase 3)
- * Storing these metrics makes it easy to construct a dashboard visualising the candidate's detailed score.
- *
- * FLOW INVOLVEMENT:
- * 1. Generated in POST /api/interviews (empty answer/metrics)
- * 2. Filled in POST /api/interviews/questions/[questionId]/answer (stores type, media links, transcript, and AI evaluation output)
- * 3. Read in GET /api/interviews/[id]/questions (conduct screen) and GET /api/interviews/[id] (summary report page)
- */

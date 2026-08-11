@@ -28,19 +28,15 @@ export default function ReadinessScore() {
   const [csScore, setCsScore] = useState(60);
   const [aptitudeScore, setAptitudeScore] = useState(75);
   
-  const [readinessScore, setReadinessScore] = useState(0);
-
   // Compute weight-adjusted readiness score
   // Weights: Resume=20%, Coding=25%, Interview=25%, CS Core=15%, Aptitude=15%
-  useEffect(() => {
-    const computed = 
-      (resumeScore * 0.20) + 
-      (codingScore * 0.25) + 
-      (interviewScore * 0.25) + 
-      (csScore * 0.15) + 
-      (aptitudeScore * 0.15);
-    setReadinessScore(Math.round(computed));
-  }, [resumeScore, codingScore, interviewScore, csScore, aptitudeScore]);
+  const readinessScore = Math.round(
+    (resumeScore * 0.20) + 
+    (codingScore * 0.25) + 
+    (interviewScore * 0.25) + 
+    (csScore * 0.15) + 
+    (aptitudeScore * 0.15)
+  );
 
   // Determine classification and color based on score
   const getClassification = (score: number) => {

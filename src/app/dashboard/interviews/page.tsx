@@ -59,11 +59,6 @@ export default function InterviewsDashboardPage() {
   const [role, setRole] = useState("Frontend");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
 
-  useEffect(() => {
-    fetchInterviews();
-    fetchResumes();
-  }, []);
-
   async function fetchInterviews() {
     try {
       const res = await fetch("/api/interviews");
@@ -96,6 +91,11 @@ export default function InterviewsDashboardPage() {
       console.error(err);
     }
   }
+
+  useEffect(() => {
+    fetchInterviews();
+    fetchResumes();
+  }, []);
 
   async function handleStartInterview(e: React.FormEvent) {
     e.preventDefault();

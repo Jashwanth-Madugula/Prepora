@@ -3,22 +3,31 @@
  * @category Business Logic Service
  *
  * Why this code exists:
- * Implements core business operations and logic handlers for "interview-analytics.service.ts".
- * - Specifically handles AI-powered behavioral and technical mock interview evaluation workflows, question lists generation, or audio/video recording processing.
- *
- * What problem it solves:
- * - Decouples computation-heavy, algorithmic, or external API-dependent operations from HTTP controllers (Next.js route handlers) to ensure clean separation of concerns and high testability.
- *
- * How it works internally:
- * - Exposes async methods and utilities that process input datasets, interface with Mongoose models, and communicate with external services (like Groq, Cloudinary, or Judge0 compilers).
+ * Computes comprehensive summary performance analytics for completed mock interview sessions.
+ * Aggregates scores across 7 core metrics, concept coverage, identified missing concepts,
+ * strong/weak topic classifications, and generates targeted, actionable study recommendations.
  */
 
+export interface InterviewAnalyticsResult {
+  overallScore: number;
+  communication: number;
+  technicalAccuracy: number;
+  confidence: number;
+  completeness: number;
+  structure: number;
+  clarity: number;
+  fluency: number;
+  conceptCoverage?: number;
+  strongTopics?: string[];
+  weakTopics?: string[];
+  missingConcepts?: string[];
+  recommendations?: string[];
+}
+
 /**
- * Calculates the overall summary results for a completed interview.
- * Computes average scores across all questions for overall score and each individual metric:
- * Communication, Technical Accuracy, Confidence, Completeness, and Structure.
+ * Calculates the overall summary results and RAG insights for a completed interview.
  */
-export async function calculateInterviewResult(questions: any[]) {
+export async function calculateInterviewResult(questions: any[]): Promise<InterviewAnalyticsResult> {
   if (!questions || questions.length === 0) {
     return {
       overallScore: 0,
@@ -29,8 +38,16 @@ export async function calculateInterviewResult(questions: any[]) {
       structure: 0,
       clarity: 0,
       fluency: 0,
+      conceptCoverage: 0,
+      strongTopics: [],
+      weakTopics: [],
+      missingConcepts: [],
+      recommendations: ["Complete practice questions to receive personalized recommendations."],
     };
   }
+
+  const answeredQuestions = questions.filter((q) => q.score !== undefined && q.score !== null);
+  const count = answeredQuestions.length > 0 ? answeredQuestions.length : questions.length;
 
   const overallTotal = questions.reduce((sum, q) => sum + (q.score || 0), 0);
   const commTotal = questions.reduce((sum, q) => sum + (q.communicationScore || 0), 0);
@@ -40,8 +57,63 @@ export async function calculateInterviewResult(questions: any[]) {
   const structTotal = questions.reduce((sum, q) => sum + (q.structureScore || 0), 0);
   const clarityTotal = questions.reduce((sum, q) => sum + (q.clarityScore || 0), 0);
   const fluencyTotal = questions.reduce((sum, q) => sum + (q.fluencyScore || 0), 0);
+  const coverageTotal = questions.reduce((sum, q) => sum + (q.conceptCoverage || q.completenessScore || 0), 0);
 
-  const count = questions.length;
+  // Aggregate missing concepts across all questions
+  const allMissingConcepts: string[] = [];
+  const categoryScores: Record<string, { total: number; count: number }> = {};
+
+  questions.forEach((q) => {
+    if (q.category) {
+      if (!categoryScores[q.category]) {
+        categoryScores[q.category] = { total: 0, count: 0 };
+      }
+      categoryScores[q.category].total += q.score || 0;
+      categoryScores[q.category].count += 1;
+    }
+
+    if (Array.isArray(q.weaknesses)) {
+      allMissingConcepts.push(...q.weaknesses);
+    }
+  });
+
+  const strongTopics: string[] = [];
+  const weakTopics: string[] = [];
+
+  Object.entries(categoryScores).forEach(([cat, data]) => {
+    const avg = data.count > 0 ? Math.round(data.total / data.count) : 0;
+    if (avg >= 75) {
+      strongTopics.push(cat);
+    } else {
+      weakTopics.push(cat);
+    }
+  });
+
+  // Generate specific actionable recommendations based on weak areas
+  const recommendations: string[] = [];
+  if (weakTopics.length > 0) {
+    weakTopics.forEach((topic) => {
+      recommendations.push(
+        `Focus on deep-diving into ${topic} fundamentals, core architecture trade-offs, and practical design patterns.`
+      );
+    });
+  }
+
+  if (Math.round(techTotal / count) < 75) {
+    recommendations.push(
+      "Strengthen precision in explaining technical mechanics, step-by-step lifecycles, and internal data structures."
+    );
+  }
+
+  if (Math.round(structTotal / count) < 75) {
+    recommendations.push(
+      "Practice using the STAR framework (Situation, Task, Action, Result) to organize answers systematically."
+    );
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push("Excellent performance across all evaluated topics! Continue practicing advanced system design and edge-case scenarios.");
+  }
 
   return {
     overallScore: Math.round(overallTotal / count),
@@ -52,19 +124,10 @@ export async function calculateInterviewResult(questions: any[]) {
     structure: Math.round(structTotal / count),
     clarity: Math.round(clarityTotal / count),
     fluency: Math.round(fluencyTotal / count),
+    conceptCoverage: Math.round(coverageTotal / count),
+    strongTopics,
+    weakTopics,
+    missingConcepts: Array.from(new Set(allMissingConcepts)).slice(0, 5),
+    recommendations: recommendations.slice(0, 4),
   };
 }
-
-/**
- * FILE PURPOSE & HELP:
- * This service computes overall and granular average scores (Communication, Technical Accuracy,
- * Confidence, Completeness, Structure, Clarity, and Fluency) for a completed interview session.
- * It receives an array of answered questions, aggregates their individual score fields,
- * and outputs rounded average percentages. The resulting metrics object is stored in the interview
- * document and rendered on the interview summary screen to give visual progress charts.
- *
- * FLOW INVOLVEMENT:
- * 1. Called in PATCH /api/interviews/[id] when status = "completed".
- * 2. Compiles averages across the 7 criteria for all interview question models linked to the session.
- * 3. Results are saved to the parent Interview document and returned in the final API response.
- */

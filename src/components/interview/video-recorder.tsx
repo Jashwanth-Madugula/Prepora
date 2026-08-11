@@ -82,7 +82,7 @@ export default function VideoRecorder({ onRecordingComplete }: VideoRecorderProp
   }, [recordingStatus]);
 
   // Request media access and start live preview
-  const startCameraPreview = async () => {
+  async function startCameraPreview() {
     try {
       const streamData = await navigator.mediaDevices.getUserMedia({
         audio: true,
@@ -103,15 +103,15 @@ export default function VideoRecorder({ onRecordingComplete }: VideoRecorderProp
       console.error("Camera Access Error:", err);
       setPermission(false);
     }
-  };
+  }
 
   // Close stream tracks
-  const stopCameraStream = () => {
+  function stopCameraStream() {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
     }
-  };
+  }
 
   // Start recording the stream
   const startRecording = async () => {
@@ -150,7 +150,7 @@ export default function VideoRecorder({ onRecordingComplete }: VideoRecorderProp
         const media = new MediaRecorder(activeStream, options);
         mediaRecorderRef.current = media;
         
-        let localChunks: Blob[] = [];
+        const localChunks: Blob[] = [];
         media.ondataavailable = (event) => {
           if (typeof event.data === "undefined") return;
           if (event.data.size === 0) return;

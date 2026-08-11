@@ -100,7 +100,7 @@ export async function sendVerificationEmail(email: string, token: string) {
   if (!isEmailJSConfigured && !isSmtpConfigured) {
     throw new Error("Email delivery failed: Neither EmailJS nor SMTP credentials are configured.");
   }
-  const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${token}`;
+  const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${encodeURIComponent(token)}`;
   
   // Try sending via EmailJS first if environment variables are provided
   if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY) {
@@ -140,7 +140,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
   if (!isEmailJSConfigured && !isSmtpConfigured) {
     throw new Error("Email delivery failed: Neither EmailJS nor SMTP credentials are configured.");
   }
-  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${token}`;
+  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${encodeURIComponent(token)}`;
   
   // Try sending via EmailJS first if environment variables are provided
   if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY) {

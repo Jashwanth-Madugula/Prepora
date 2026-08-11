@@ -4,13 +4,7 @@
  *
  * Why this code exists:
  * Serves as the Next.js API serverless route endpoint responding to client HTTP fetch requests for this path.
- * 
- *
- * What problem it solves:
- * - Validates request inputs, manages rate-limiting rules, invokes business logic services, interacts with the database, and returns structured JSON responses and status codes to the frontend client.
- *
- * How it works internally:
- * - Exports async HTTP methods (GET, POST, PUT, DELETE, etc.) which parse query parameters or request body JSONs, connect to MongoDB using dbConnect(), verify permissions, and return NextResponse payloads.
+ * Handles fetching interview details with questions in chronological creation order and calculating final analytics.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -58,7 +52,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const questions = await InterviewQuestion.find({ interviewId: id });
+    const questions = await InterviewQuestion.find({ interviewId: id }).sort({ createdAt: 1 });
 
     return NextResponse.json({
       success: true,
@@ -109,7 +103,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { status } = body;
 
     if (status === "completed") {
-      const questions = await InterviewQuestion.find({ interviewId: id });
+      const questions = await InterviewQuestion.find({ interviewId: id }).sort({ createdAt: 1 });
       const analytics = await calculateInterviewResult(questions);
 
       interview.status = "completed";
@@ -137,11 +131,3 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     );
   }
 }
-
-/**
- * FILE PURPOSE & HELP:
- * This API file implements the single-session endpoints for mock interviews (GET /api/interviews/[id] and PATCH /api/interviews/[id]).
- * The GET handler fetches full metadata for a specific interview together with its questions to render the active panel or feedback report.
- * The PATCH handler marks an interview as complete. It gathers all questions, uses the `calculateInterviewResult` service to aggregate scores
- * across the 5 evaluation criteria, persists the final overallScore, and logs the completion timestamp.
- */

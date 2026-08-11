@@ -30,7 +30,7 @@ declare global {
   var mongoose: MongooseCache | undefined;
 }
 
-let cached = global.mongoose || { conn: null, promise: null };
+const cached = global.mongoose || { conn: null, promise: null };
 global.mongoose = cached;
 
 export async function dbConnect() {

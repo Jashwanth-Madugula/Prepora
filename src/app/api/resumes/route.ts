@@ -4,7 +4,6 @@
  *
  * Why this code exists:
  * Serves as the Next.js API serverless route endpoint responding to client HTTP fetch requests for this path.
- * 
  *
  * What problem it solves:
  * - Validates request inputs, manages rate-limiting rules, invokes business logic services, interacts with the database, and returns structured JSON responses and status codes to the frontend client.
@@ -20,25 +19,15 @@ import { getCurrentUserId } from "@/lib/auth";
 import { validateResumeFile } from "@/lib/resume-validation";
 import { uploadResumeBuffer } from "@/services/cloudinary.service";
 import { fileToBuffer } from "@/lib/file";
-import {
-  extractPdfText,
-} from "@/services/pdf-parser.service";
-import {
-  parseResumeWithGroq,
-} from "@/services/resume-parser.service";
-import {
-  analyzeATSWithGroq,
-  compareResumeWithJD,
-} from "@/services/ats.service";
+import { extractPdfText } from "@/services/pdf-parser.service";
+import { parseResumeWithGroq } from "@/services/resume-parser.service";
+import { analyzeATSWithGroq, compareResumeWithJD } from "@/services/ats.service";
 
-export async function POST(
-  request: NextRequest
-) {
+export async function POST(request: NextRequest) {
   try {
     await dbConnect();
 
-    const userId =
-      await getCurrentUserId();
+    const userId = await getCurrentUserId();
 
     if (!userId) {
       return NextResponse.json(
@@ -52,30 +41,17 @@ export async function POST(
       );
     }
 
-    const formData =
-      await request.formData();
+    const formData = await request.formData();
 
-    const file =
-      formData.get(
-        "file"
-      ) as File;
-
-    const title =
-      formData.get(
-        "title"
-      ) as string;
-
-    const jobDescription =
-      formData.get(
-        "jobDescription"
-      ) as string || undefined;
+    const file = formData.get("file") as File;
+    const title = formData.get("title") as string;
+    const jobDescription = (formData.get("jobDescription") as string) || undefined;
 
     if (!file) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Resume file is required",
+          message: "Resume file is required",
         },
         {
           status: 400,
@@ -87,8 +63,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Title is required",
+          message: "Title is required",
         },
         {
           status: 400,
@@ -98,15 +73,8 @@ export async function POST(
 
     validateResumeFile(file);
 
-    const buffer =
-      await fileToBuffer(
-        file
-      );
-
-    const parsedText =
-      await extractPdfText(
-        buffer
-      );
+    const buffer = await fileToBuffer(file);
+    const parsedText = await extractPdfText(buffer);
 
     // Call Groq parser and ATS analyzer
     const parsedData = await parseResumeWithGroq(parsedText);
@@ -122,65 +90,62 @@ export async function POST(
       }
     }
 
-    const uploadResult =
-      await uploadResumeBuffer(
-        buffer,
-        `resume-${Date.now()}`
+    const uploadResult = await uploadResumeBuffer(
+      buffer,
+      `resume-${Date.now()}`
+    );
+
+    const resumeCount = await Resume.countDocuments({
+      userId,
+    });
+
+    const resume = await Resume.create({
+      userId,
+      title,
+      originalFileName: file.name,
+      fileUrl: (uploadResult as any).secure_url,
+      cloudinaryPublicId: (uploadResult as any).public_id,
+      fileSize: file.size,
+      mimeType: file.type,
+      isDefault: resumeCount === 0,
+      status: ResumeStatus.ANALYZED,
+      parsedText,
+      parsedData,
+      atsScore:
+        jdResult && jdResult.atsScore && jdResult.atsScore > atsResult.score
+          ? jdResult.atsScore
+          : atsResult.score,
+      atsSuggestions: atsResult.suggestions,
+      atsKeywordsMatched: atsResult.keywordAnalysis?.matchedKeywords || [],
+      atsKeywordsMissing: atsResult.keywordAnalysis?.missingKeywords || [],
+      atsKeywordDensity: atsResult.keywordAnalysis?.keywordDensity || "",
+      atsAnalyzedAt: new Date(),
+
+      // Populate Job Description fields if evaluated
+      ...(jdResult && {
+        jdText: (jobDescription || "").trim(),
+        jdMatchPercentage: jdResult.matchPercentage,
+        jdMissingSkills: jdResult.missingSkills,
+        jdMissingKeywords: jdResult.missingKeywords,
+        jdStrengths: jdResult.strengths,
+        jdSuggestions: jdResult.suggestions,
+      }),
+    });
+
+    // Auto-ingest into RAG for interview grounding (async fail-safe)
+    try {
+      const { ingestResumeDocument, ingestJobDescriptionDocument } = await import(
+        "@/services/rag/document.service"
       );
-
-    const resumeCount =
-      await Resume.countDocuments({
-        userId,
-      });
-
-    const resume =
-      await Resume.create({
-        userId,
-
-        title,
-
-        originalFileName:
-          file.name,
-
-        fileUrl:
-          (
-            uploadResult as any
-          ).secure_url,
-
-        cloudinaryPublicId:
-          (
-            uploadResult as any
-          ).public_id,
-
-        fileSize:
-          file.size,
-
-        mimeType:
-          file.type,
-
-        isDefault:
-          resumeCount === 0,
-
-        status: ResumeStatus.ANALYZED,
-        parsedText,
-        parsedData,
-        atsScore: jdResult && jdResult.atsScore && jdResult.atsScore > atsResult.score ? jdResult.atsScore : atsResult.score,
-        atsSuggestions: atsResult.suggestions,
-        atsKeywordsMatched: atsResult.keywordAnalysis?.matchedKeywords || [],
-        atsKeywordsMissing: atsResult.keywordAnalysis?.missingKeywords || [],
-        atsKeywordDensity: atsResult.keywordAnalysis?.keywordDensity || "",
-        atsAnalyzedAt: new Date(),
-
-        // Populate Job Description fields if evaluated
-        ...(jdResult && {
-          jdText: (jobDescription || "").trim(),
-          jdMatchPercentage: jdResult.matchPercentage,
-          jdMissingSkills: jdResult.missingSkills,
-          jdMissingKeywords: jdResult.missingKeywords,
-          jdStrengths: jdResult.strengths,
-          jdSuggestions: jdResult.suggestions,
-        })
-      });
+      if (parsedText && parsedText.trim()) {
+        await ingestResumeDocument(userId, resume._id, title, parsedText);
+      }
+      if (jobDescription && jobDescription.trim()) {
+        await ingestJobDescriptionDocument(userId, resume._id, title, jobDescription.trim());
+      }
+    } catch (ragError: any) {
+      console.warn("Resume RAG auto-ingestion warning (non-fatal):", ragError?.message);
+    }
 
     return NextResponse.json(
       {
@@ -192,16 +157,12 @@ export async function POST(
       }
     );
   } catch (error) {
-    console.error(
-      "Resume Upload Error:",
-      error
-    );
+    console.error("Resume Upload Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Failed to upload resume",
+        message: "Failed to upload resume",
       },
       {
         status: 500,
@@ -214,15 +175,13 @@ export async function GET() {
   try {
     await dbConnect();
 
-    const userId =
-      await getCurrentUserId();
+    const userId = await getCurrentUserId();
 
     if (!userId) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Unauthorized",
+          message: "Unauthorized",
         },
         {
           status: 401,
@@ -230,38 +189,27 @@ export async function GET() {
       );
     }
 
-    const resumes =
-      await Resume.find({
-        userId,
+    const resumes = await Resume.find({
+      userId,
+    })
+      .sort({
+        isDefault: -1,
+        createdAt: -1,
       })
-        .sort({
-          isDefault: -1,
-          createdAt: -1,
-        })
-        .select(
-          "-parsedText"
-        );
+      .select("-parsedText");
 
-    return NextResponse.json(
-      {
-        success: true,
-        count:
-          resumes.length,
-
-        resumes,
-      }
-    );
+    return NextResponse.json({
+      success: true,
+      count: resumes.length,
+      resumes,
+    });
   } catch (error) {
-    console.error(
-      "Get Resumes Error:",
-      error
-    );
+    console.error("Get Resumes Error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Failed to fetch resumes",
+        message: "Failed to fetch resumes",
       },
       {
         status: 500,

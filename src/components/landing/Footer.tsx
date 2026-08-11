@@ -24,7 +24,9 @@ export default function Footer() {
 
   // Monitor theme changes on documentElement
   useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
+    const timer = setTimeout(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    }, 0);
     
     const observer = new MutationObserver(() => {
       setIsDark(document.documentElement.classList.contains("dark"));
@@ -35,7 +37,10 @@ export default function Footer() {
       attributeFilter: ["class"],
     });
     
-    return () => observer.disconnect();
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
   }, []);
 
   return (

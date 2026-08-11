@@ -1,0 +1,185 @@
+================================================================================
+PREPORA RAG SYSTEM: COMPREHENSIVE ARCHITECTURE & IMPLEMENTATION GUIDE
+================================================================================
+
+1. WHAT IS PREPORA RAG & WHY WAS IT BUILT?
+--------------------------------------------------------------------------------
+In standard AI mock interview systems, Large Language Models (LLMs) often suffer
+from three major weaknesses:
+  1. Hallucinations & Generic Questions: The interviewer asks generic or factually
+     unsupported questions instead of probing realistic engineering trade-offs.
+  2. Lack of Candidate Grounding: The interviewer does not deeply connect
+     questions to the candidate's actual projects, verified skills, or the
+     specific Job Description (JD) requirements.
+  3. Superficial Answer Evaluation: When evaluating answers, standard models
+     merely look at general tone rather than rigorously checking whether specific
+     core technical concepts (e.g. JWT signature verification, reconciliation
+     diffing, B-Tree index traversal) were accurately explained or omitted.
+
+Prepora's RAG (Retrieval-Augmented Generation) system solves all three issues by
+creating an end-to-end pipeline that retrieves verified Technical Knowledge,
+Candidate Resume details, and Job Description requirements to ground every question,
+detect missing concepts in candidate answers, and generate adaptive follow-up
+questions.
+
+
+2. ARCHITECTURE & DATA FLOW
+--------------------------------------------------------------------------------
+The complete user journey flows as follows:
+
+   [Candidate]
+        │
+        ▼
+   [Interview Setup Screen] (Topic / Role, Difficulty, Resume, JD)
+        │
+        ▼
+   [RAG Multi-Source Retrieval Engine]
+        ├─ 1. Technical Knowledge Base (MongoDB Vector Search / Cosine Similarity)
+        ├─ 2. Candidate Resume Chunks (Isolated strictly by userId)
+        └─ 3. Target Job Description Chunks (Isolated by userId)
+        │
+        ▼
+   [Safe Context Builder & Sanitizer]
+        ├─ Injects strict prompt injection barriers
+        └─ Truncates to token/character budget
+        │
+        ▼
+   [Groq LLaMA-3.3-70B Question Generator]
+        │
+        ▼
+   [5 Structured Questions with Follow-Ups] (Persisted to MongoDB)
+        │
+        ▼
+   [Candidate Conduct Screen]
+        ├─ Text submission
+        ├─ Audio voice recording (via Cloudinary + Groq Whisper STT)
+        └─ Video recording (via Cloudinary + Groq Whisper STT)
+        │
+        ▼
+   [RAG Evaluation & Missing Concept Detection]
+        ├─ Retrieves expected concept rubrics for the question
+        ├─ Evaluates Technical Accuracy, Concept Coverage (%), Communication,
+        │  Confidence, Completeness, Structure, Clarity, and Fluency
+        ├─ Identifies omitted Key Concepts
+        └─ Generates targeted Adaptive Follow-up Question
+        │
+        ▼
+   [Final Diagnostic Scorecard & Recommendation Engine]
+        ├─ Aggregated 7 core metric averages
+        ├─ Concept Coverage percentage
+        ├─ Strong vs Weak Topics classification
+        └─ Specific, actionable study recommendations based on missing concepts
+
+
+3. COMPONENT BREAKDOWN & WHY EVERYTHING WAS DESIGNED THIS WAY
+--------------------------------------------------------------------------------
+
+A. MongoDB Collection & Data Model (src/models/rag-document.model.ts)
+   - Database: test
+   - Collection: ragdocuments
+   - Why: Kept in a dedicated collection so it never pollutes interview sessions,
+     coding attempts, or aptitude questions.
+   - Fields:
+     * title: String
+     * content: Normalized text chunk
+     * chunkIndex: Number
+     * embedding: [Number] (768-dimensional dense vector)
+     * contentHash: SHA-256 hash for deterministic deduplication
+     * metadata: Contains type (technical, interview, evaluation, resume,
+       job-description), topic, role, difficulty, and userId for security isolation.
+
+B. Semantic Chunking Service (src/services/rag/chunking.service.ts)
+   - Why: Naive character slicing splits words and code blocks in half.
+   - How it works: Splits text at natural paragraph breaks and sentence
+     boundaries with a 1000-character target and 150-character sliding overlap.
+     Preserves code blocks, lists, and markdown headers.
+
+C. Vector Embeddings (src/services/rag/embedding.service.ts)
+   - Provider: Google Generative AI (gemini-embedding-001)
+   - Dimensions: 768
+   - Why: Exactly matches the MongoDB Atlas Vector Search index definition
+     (rag_vector_index with 768 dimensions and cosine similarity).
+   - In-Memory Cache: Stores recent query and chunk embeddings to reduce API
+     calls, save costs, and eliminate rate-limit errors.
+   - Retries: Exponential backoff with up to 3 retry attempts.
+
+D. Hybrid Retrieval Engine (src/services/rag/retrieval.service.ts)
+   - Dual Search Strategy:
+     1. Primary: Executes MongoDB Atlas hardware-accelerated $vectorSearch
+        aggregation with post-$match filters.
+     2. Resilient Fallback: If Atlas index is initializing or unavailable,
+        an in-memory mathematical cosine similarity engine calculates vector
+        similarity alongside exact keyword matching.
+   - Hybrid Scoring: 80% vector similarity + 20% exact technology keyword match.
+   - Why: Guarantees that exact framework/tool names (like Redis, Docker, JWT)
+     are boosted while maintaining semantic understanding.
+
+E. Context Builder & Security (src/services/rag/context.service.ts)
+   - Prompt Injection Defense: Encapsulates retrieved knowledge within XML tags
+     with system instructions stating that retrieved text is reference data
+     and must never be executed as instructions.
+   - Budget Control: Limits context to top relevant chunks (max 4000-4500 chars)
+     to prevent token exhaustion.
+
+F. Multi-Source Orchestration (src/services/rag/rag.service.ts)
+   - Combines Technical Knowledge + Resume Context + Job Description Context.
+   - Source Priority: Candidate facts come from Resume, job requirements from
+     JD, and factual mechanics from Technical Knowledge Base.
+
+G. Resume & Job Description Auto-Ingestion
+   - src/app/api/resumes/route.ts: Automatically chunks, hashes, embeds, and
+     indexes uploaded resumes and attached JDs into ragdocuments.
+   - src/app/api/resumes/[id]/route.ts: Cleans up all RAG chunks when a resume
+     is deleted, leaving zero orphaned embeddings.
+   - src/app/api/resumes/ats-compare/route.ts: Indexes newly compared Job
+     Descriptions.
+   - Tenant Security: All queries require metadata.userId matching the
+     authenticated user token.
+
+H. Interview Generation & Evaluation (src/services/interview-ai.service.ts &
+   interview-evaluation.service.ts)
+   - Grounded Questions: Questions test real-world scenarios based on RAG knowledge.
+   - Concept Coverage: Grades what percentage of required concepts were explained.
+   - Adaptive Follow-Ups: Automatically triggers a targeted follow-up question
+     focusing directly on concepts the candidate missed.
+   - Fallback System: If RAG retrieval throws an exception, the system seamlessly
+     falls back to standard generation without interrupting the user.
+
+I. Curated Technical Knowledge Base & Seeder (scripts/seed-rag.ts)
+   - Seeds 24 curated topics spanning JavaScript, TypeScript, React, Next.js,
+     Node.js, Express, MongoDB, SQL, REST APIs, Authentication, Redis, Docker,
+     Git, AWS, System Design, Data Structures, Algorithms, OOP, DBMS, OS,
+     Networks, and Evaluation Rubrics.
+   - Runs with: npm run seed:rag
+
+
+4. HOW TO RUN & TEST
+--------------------------------------------------------------------------------
+
+1. Seed the Technical Knowledge Base:
+   npm run seed:rag
+
+2. Run Automated RAG Test Suite:
+   npx tsx scripts/test-rag.ts
+
+3. Start Local Development Server:
+   npm run dev
+
+4. Run Production Build:
+   npm run build
+
+
+5. SUMMARY OF KEY METRICS & SPECS
+--------------------------------------------------------------------------------
+- Database: MongoDB Atlas (Database: test, Collection: ragdocuments)
+- Vector Index Name: rag_vector_index
+- Embedding Model: gemini-embedding-001
+- Vector Dimensions: 768
+- Similarity Function: Cosine
+- LLM Evaluator: Groq LLaMA-3.3-70B
+- Chunk Size: 1000 characters
+- Chunk Overlap: 150 characters
+- Supported Answer Formats: Text, Audio (Cloudinary + Whisper), Video (Cloudinary + Whisper)
+- Scorecard Metrics: Technical Accuracy, Concept Coverage, Communication,
+  Confidence, Completeness, Structure, Clarity, Fluency.
+================================================================================

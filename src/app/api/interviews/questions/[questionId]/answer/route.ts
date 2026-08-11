@@ -3,14 +3,9 @@
  * @category API Route Handler (Backend)
  *
  * Why this code exists:
- * Serves as the Next.js API serverless route endpoint responding to client HTTP fetch requests for this path.
- * 
- *
- * What problem it solves:
- * - Validates request inputs, manages rate-limiting rules, invokes business logic services, interacts with the database, and returns structured JSON responses and status codes to the frontend client.
- *
- * How it works internally:
- * - Exports async HTTP methods (GET, POST, PUT, DELETE, etc.) which parse query parameters or request body JSONs, connect to MongoDB using dbConnect(), verify permissions, and return NextResponse payloads.
+ * Evaluates candidate responses (text, audio, video) using RAG knowledge grounding and rubric checking.
+ * Saves 7-dimensional metrics, concept coverage, detected missing concepts, and when knowledge gaps
+ * exist, dynamically generates and creates an interactive adaptive follow-up question in MongoDB.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -26,11 +21,6 @@ interface RouteParams {
   }>;
 }
 
-/**
- * POST: Submits the candidate's answer for evaluation.
- * Triggers the AI Evaluation Engine to grade the response on 5 criteria,
- * and saves both scores and suggestions in MongoDB.
- */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     await dbConnect();
@@ -46,20 +36,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     if (!mongoose.Types.ObjectId.isValid(questionId)) {
       return NextResponse.json(
-        { success: false, message: "Invalid question ID" },
-        { status: 400 }
-      );
-    }
-
-    const body = await request.json();
-    const { answer, answerType, audioUrl, videoUrl, transcript, duration } = body;
-
-    const type = answerType || "text";
-    const contentToEvaluate = type === "text" ? answer : transcript;
-
-    if (typeof contentToEvaluate !== "string") {
-      return NextResponse.json(
-        { success: false, message: "Response content must be a string" },
+        { success: false, message: "Invalid question ID format" },
         { status: 400 }
       );
     }
@@ -67,16 +44,46 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const question = await InterviewQuestion.findById(questionId);
     if (!question) {
       return NextResponse.json(
-        { success: false, message: "Question not found" },
+        { success: false, message: "Question record not found" },
         { status: 404 }
       );
     }
 
-    // Speech analytics calculations
-    const wordCount = contentToEvaluate.trim() ? contentToEvaluate.trim().split(/\s+/).length : 0;
+    const body = await request.json();
+    const {
+      answer,
+      answerType,
+      audioUrl,
+      videoUrl,
+      transcript,
+      duration = 0,
+      useRAG = true,
+      enableAdaptiveFollowUps = true,
+    } = body;
+
+    const type = answerType || "text";
+    let contentToEvaluate = answer || transcript || "";
+
+    if (!contentToEvaluate && type === "text") {
+      return NextResponse.json(
+        { success: false, message: "Please provide a valid typed response" },
+        { status: 400 }
+      );
+    }
+
+    if (type !== "text" && !transcript && !contentToEvaluate) {
+      return NextResponse.json(
+        { success: false, message: "Transcript is missing for audio/video response" },
+        { status: 400 }
+      );
+    }
+
+    // Audio / speech cadence metrics
     let speakingSpeed = 0;
-    if (duration && duration > 0) {
-      speakingSpeed = Math.round((wordCount / duration) * 60);
+    if (duration > 0 && contentToEvaluate) {
+      const wordCount = contentToEvaluate.trim().split(/\s+/).length;
+      const minutes = duration / 60;
+      speakingSpeed = Math.round(wordCount / minutes);
     }
 
     const fillerWords = ["um", "uh", "like", "basically", "actually", "literally", "you know", "i mean"];
@@ -92,12 +99,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    // Call AI service to evaluate the response (transcribed speech or written text)
-    const evaluationString = await evaluateAnswer(question.question, contentToEvaluate.trim(), type);
+    // Call RAG AI service to evaluate the response & detect missing concepts
+    const evaluationString = await evaluateAnswer(
+      question.question,
+      contentToEvaluate.trim(),
+      type,
+      {
+        category: question.category,
+        topic: question.category,
+        useRAG,
+        enableAdaptiveFollowUps,
+      }
+    );
     const result = JSON.parse(evaluationString);
 
     // Save candidate answers and metrics into the database
-    question.answer = contentToEvaluate.trim(); // store text transcript as answer for backward compatibility
+    question.answer = contentToEvaluate.trim();
     question.answerType = type;
     question.transcript = type === "text" ? "" : (transcript || "");
     question.audioUrl = audioUrl || "";
@@ -112,6 +129,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     question.structureScore = result.structure || 0;
     question.clarityScore = result.clarity || 0;
     question.fluencyScore = result.fluency || 0;
+    question.conceptCoverage = result.conceptCoverage || result.completeness || 0;
+    question.missingConcepts = result.missingConcepts || [];
+    question.incorrectConcepts = result.incorrectConcepts || [];
+    question.adaptiveFollowUp = result.adaptiveFollowUp || "";
     
     question.strengths = result.strengths || [];
     question.weaknesses = result.weaknesses || [];
@@ -122,10 +143,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     await question.save();
 
+    // DYNAMIC NEXT QUESTION: If an adaptive follow-up was generated, dynamically insert it as an interactive next question
+    let followUpQuestionDoc: any = null;
+    if (result.adaptiveFollowUp && enableAdaptiveFollowUps !== false && (result.overallScore || 0) < 95) {
+      const existingFollowUp = await InterviewQuestion.findOne({
+        interviewId: question.interviewId,
+        question: result.adaptiveFollowUp,
+      });
+
+      if (!existingFollowUp) {
+        followUpQuestionDoc = await InterviewQuestion.create({
+          interviewId: question.interviewId,
+          question: result.adaptiveFollowUp,
+          category: question.category,
+          difficulty: question.difficulty,
+          followUps: ["Explain the underlying mechanism", "Discuss real-world practical trade-offs"],
+        });
+      } else {
+        followUpQuestionDoc = existingFollowUp;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       evaluation: result,
       question,
+      followUpQuestion: followUpQuestionDoc,
     });
   } catch (error: any) {
     console.error("POST Question Answer Error:", error);
@@ -135,20 +178,3 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
   }
 }
-
-/**
- * FILE PURPOSE & HELP:
- * This API endpoint handles POST requests to submit and grade an answer for a specific question.
- * It connects to MongoDB, retrieves the question, and handles text, audio, and video inputs.
- * If the input was spoken, it receives the media URLs and transcripts and evaluates the speech-to-text content.
- *
- * Scoring:
- * Grades candidate response across 7 criteria:
- * Technical Accuracy, Communication, Confidence, Completeness, Structure, Clarity, and Fluency.
- * Saved results are subsequently rendered in the candidate scorecard dashboards.
- *
- * FLOW INVOLVEMENT:
- * 1. Frontend submits candidate response block (and any Cloudinary media links) here.
- * 2. Evaluates the text content using the evaluateAnswer service.
- * 3. Persists all values back to the MongoDB InterviewQuestion model and replies.
- */

@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     } catch (mailError) {
       console.error("Failed to send verification email:", mailError);
       if (process.env.NODE_ENV !== "production") {
-        const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${verificationToken}`;
+        const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/verify-email?token=${encodeURIComponent(verificationToken)}`;
         console.log("\n==================================================");
         console.log("DEVELOPMENT VERIFICATION LINK:");
         console.log(verifyUrl);

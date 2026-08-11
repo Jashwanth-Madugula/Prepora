@@ -3,33 +3,75 @@
  * @category Business Logic Service
  *
  * Why this code exists:
- * Implements core business operations and logic handlers for "interview-ai.service.ts".
- * - Specifically handles AI-powered behavioral and technical mock interview evaluation workflows, question lists generation, or audio/video recording processing.
- *
- * What problem it solves:
- * - Decouples computation-heavy, algorithmic, or external API-dependent operations from HTTP controllers (Next.js route handlers) to ensure clean separation of concerns and high testability.
- *
- * How it works internally:
- * - Exposes async methods and utilities that process input datasets, interface with Mongoose models, and communicate with external services (like Groq, Cloudinary, or Judge0 compilers).
+ * Generates AI-powered mock interview questions grounded in RAG technical knowledge,
+ * candidate resumes, and target job descriptions. Guarantees question diversity, prevents
+ * repetition, adheres to candidate experience levels, and provides seamless non-RAG fallback.
  */
 
-import Groq from "groq-sdk";
+import { getGroqClient } from "@/lib/groq";
+import { getMultiSourceRagContext } from "@/services/rag/rag.service";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+export interface QuestionGenOptions {
+  userId?: string;
+  resumeId?: string;
+  jobDescriptionId?: string;
+  previousQuestions?: string[];
+  useRAG?: boolean;
+}
 
+function getModelName(): string {
+  return process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+}
 
 /**
- * Generates questions based on parsed resume data.
+ * Generates questions based on parsed resume data and RAG grounding.
  * Focuses on projects, skills, experience, and certifications.
  */
-export async function generateResumeQuestions(resumeData: any): Promise<any[]> {
-  const prompt = `You are an expert resume-based interviewer. Generate exactly 5 relevant interview questions based on the candidate's resume.
-Focus on their skills, projects, experience, and certifications.
-For projects, ask questions about architecture, challenges, or why specific technologies were selected.
-For skills, ask deep-dive conceptual questions.
+export async function generateResumeQuestions(
+  resumeData: any,
+  options: QuestionGenOptions = {}
+): Promise<any[]> {
+  const useRAG = options.useRAG !== false;
+  let ragContextBlock = "";
+
+  if (useRAG && options.userId) {
+    try {
+      const skillsStr = resumeData?.skills?.join(", ") || "";
+      const projectsStr = (resumeData?.projects || [])
+        .map((p: any) => (typeof p === "string" ? p : p.name || ""))
+        .join(", ");
+      const query = `Candidate resume skills ${skillsStr} and projects ${projectsStr} technical depth and architecture questions`;
+
+      const ragResult = await getMultiSourceRagContext({
+        query,
+        userId: options.userId,
+        resumeId: options.resumeId,
+        includeResume: true,
+        includeJobDescription: true,
+      });
+
+      if (ragResult.combinedContext) {
+        ragContextBlock = `
+=== RETRIEVED GROUNDING KNOWLEDGE (RESUME & TECHNICAL BASE) ===
+${ragResult.safePromptContext}
+=== END RETRIEVED KNOWLEDGE ===
+`;
+      }
+    } catch (ragError: any) {
+      console.warn("Resume question RAG retrieval failed (fallback to standard):", ragError?.message);
+    }
+  }
+
+  const prompt = `You are an expert resume-based interviewer. Generate exactly 5 relevant interview questions based on the candidate's resume and reference context.
+Focus on their verified skills, projects, experience, and certifications.
+For projects, ask questions about architecture, challenges, trade-offs, or why specific technologies were selected.
+For skills, ask deep-dive conceptual and practical questions.
+Do NOT invent projects or tools not mentioned in the resume.
 
 Resume Data:
 ${JSON.stringify(resumeData)}
+
+${ragContextBlock}
 
 Return your response in this JSON format:
 {
@@ -45,34 +87,75 @@ Return your response in this JSON format:
     }
   ]
 }
-Ensure it is a valid JSON object. Do not include any other markdown text or comments.`;
-
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.7,
-    response_format: { type: "json_object" },
-  });
+Ensure it is a valid JSON object. Do not include any other markdown text or comments outside the JSON structure.`;
 
   try {
+    const groq = getGroqClient();
+    const completion = await groq.chat.completions.create({
+      model: getModelName(),
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+    });
+
     const data = JSON.parse(completion.choices[0].message.content || "{}");
     return data.questions || [];
   } catch (error) {
-    console.error("Failed to parse resume questions JSON:", error);
+    console.error("Failed to generate resume questions:", error);
     return [];
   }
 }
 
 /**
- * Generates technical questions separate from the resume based on a selected topic and difficulty.
+ * Generates technical questions grounded in RAG technical knowledge, candidate resume, and JD.
  */
 export async function generateTechnicalQuestions(
   topic: string,
-  difficulty: string
+  difficulty: string,
+  options: QuestionGenOptions = {}
 ): Promise<any[]> {
+  const useRAG = options.useRAG !== false;
+  let ragContextBlock = "";
+
+  if (useRAG) {
+    try {
+      const prevContext = options.previousQuestions?.length
+        ? `Avoid repeating these topics/questions: ${options.previousQuestions.join(" | ")}`
+        : "";
+
+      const query = `${difficulty} level ${topic} technical interview knowledge, core architecture, real-world trade-offs, and practical design. ${prevContext}`;
+
+      const ragResult = await getMultiSourceRagContext({
+        query,
+        topic,
+        role: topic,
+        difficulty: difficulty as any,
+        userId: options.userId,
+        resumeId: options.resumeId,
+        jobDescriptionId: options.jobDescriptionId,
+        includeResume: Boolean(options.userId && options.resumeId),
+        includeJobDescription: Boolean(options.userId),
+      });
+
+      if (ragResult.combinedContext) {
+        ragContextBlock = `
+=== RETRIEVED VERIFIED TECHNICAL KNOWLEDGE ===
+${ragResult.safePromptContext}
+=== END RETRIEVED KNOWLEDGE ===
+`;
+      }
+    } catch (ragError: any) {
+      console.warn("Technical question RAG retrieval failed (fallback to standard):", ragError?.message);
+    }
+  }
+
   const prompt = `You are an expert technical interviewer. Generate exactly 5 questions for a candidate applying for a role specializing in: ${topic}.
 The difficulty level should be: ${difficulty}.
-For each question, provide 2 follow-up questions to test deeper knowledge.
+Ground all factual questions in the verified reference knowledge provided.
+Make sure questions test practical reasoning, architectural trade-offs, and real-world understanding.
+For each question, provide 2 targeted follow-up questions to test deeper knowledge.
+
+${ragContextBlock}
 
 Return your response in this JSON format:
 {
@@ -90,14 +173,15 @@ Return your response in this JSON format:
 }
 Ensure it is a valid JSON object. Do not include any other markdown text or comments.`;
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.7,
-    response_format: { type: "json_object" },
-  });
-
   try {
+    const groq = getGroqClient();
+    const completion = await groq.chat.completions.create({
+      model: getModelName(),
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+    });
+
     const data = JSON.parse(completion.choices[0].message.content || "{}");
     return data.questions || [];
   } catch (error) {
@@ -129,14 +213,15 @@ Return your response in this JSON format:
 }
 Ensure it is a valid JSON object. Do not include any other markdown text or comments.`;
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.7,
-    response_format: { type: "json_object" },
-  });
-
   try {
+    const groq = getGroqClient();
+    const completion = await groq.chat.completions.create({
+      model: getModelName(),
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+    });
+
     const data = JSON.parse(completion.choices[0].message.content || "{}");
     return data.questions || [];
   } catch (error) {
@@ -151,13 +236,3 @@ Ensure it is a valid JSON object. Do not include any other markdown text or comm
 export async function generateAIQuestions(resumeData: any) {
   return generateResumeQuestions(resumeData);
 }
-
-/**
- * FILE PURPOSE & HELP:
- * This service handles the AI generation of mock interview questions. It includes specific
- * prompts for Resume-Based interviews (extracting custom questions from skills and projects),
- * Technical interviews (topic-specific, difficulty-graded questions with nested follow-ups),
- * and HR interviews (standard HR behavioral prompts with contextual follow-ups).
- * It communicates with the Groq API and uses its JSON response format feature to guarantee
- * structured question objects that can be immediately persisted in the database.
- */

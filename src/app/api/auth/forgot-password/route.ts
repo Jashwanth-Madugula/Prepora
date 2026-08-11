@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     } catch (mailError) {
       console.error("Failed to send reset password email:", mailError);
       if (process.env.NODE_ENV !== "production") {
-        const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${resetToken}`;
+        const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password?token=${encodeURIComponent(resetToken)}`;
         console.log("\n==================================================");
         console.log("DEVELOPMENT RESET PASSWORD LINK:");
         console.log(resetUrl);

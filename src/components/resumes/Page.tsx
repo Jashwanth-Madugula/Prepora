@@ -47,7 +47,10 @@ export default function ResumesPage() {
   }
 
   useEffect(() => {
-    loadResumes();
+    const timer = setTimeout(() => {
+      loadResumes();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   async function handleDelete(

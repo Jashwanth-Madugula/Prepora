@@ -4,7 +4,6 @@
  *
  * Why this code exists:
  * Serves as the Next.js API serverless route endpoint responding to client HTTP fetch requests for this path.
- * 
  *
  * What problem it solves:
  * - Validates request inputs, manages rate-limiting rules, invokes business logic services, interacts with the database, and returns structured JSON responses and status codes to the frontend client.
@@ -20,6 +19,7 @@ import { Resume } from "@/models/Resume";
 import { verifyAccessToken } from "@/lib/jwt";
 import { JWTPayload } from "@/types/auth";
 import { compareResumeWithJD } from "@/services/ats.service";
+import { ingestJobDescriptionDocument } from "@/services/rag/document.service";
 
 async function getAuthUser() {
   const cookieStore = await cookies();
@@ -93,13 +93,25 @@ export async function POST(req: NextRequest) {
     resume.jdMissingKeywords = result.missingKeywords;
     resume.jdStrengths = result.strengths;
     resume.jdSuggestions = result.suggestions;
-    
+
     // Also update general atsScore if the comparison returns a higher layout value
     if (result.atsScore && result.atsScore > (resume.atsScore || 0)) {
       resume.atsScore = result.atsScore;
     }
 
     await resume.save();
+
+    // 7. Auto-index Job Description into RAG for interview grounding
+    try {
+      await ingestJobDescriptionDocument(
+        payload.userId,
+        resume._id,
+        resume.title || "Target Role",
+        jobDescription.trim()
+      );
+    } catch (ragErr: any) {
+      console.warn("Job description RAG auto-ingestion warning (non-fatal):", ragErr?.message);
+    }
 
     return NextResponse.json({
       success: true,

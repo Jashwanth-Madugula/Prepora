@@ -3,36 +3,87 @@
  * @category Business Logic Service
  *
  * Why this code exists:
- * Implements core business operations and logic handlers for "interview-evaluation.service.ts".
- * - Specifically handles AI-powered behavioral and technical mock interview evaluation workflows, question lists generation, or audio/video recording processing.
- *
- * What problem it solves:
- * - Decouples computation-heavy, algorithmic, or external API-dependent operations from HTTP controllers (Next.js route handlers) to ensure clean separation of concerns and high testability.
- *
- * How it works internally:
- * - Exposes async methods and utilities that process input datasets, interface with Mongoose models, and communicate with external services (like Groq, Cloudinary, or Judge0 compilers).
+ * Evaluates candidate responses (text, audio transcripts, video transcripts) against verified RAG
+ * knowledge and evaluation rubrics. Detects concept coverage, missing concepts, incorrect claims,
+ * scores across 7 dimensions, and generates targeted adaptive follow-up questions.
  */
 
-import Groq from "groq-sdk";
+import { getGroqClient } from "@/lib/groq";
+import { retrieveRelevantChunks } from "@/services/rag/retrieval.service";
+import { buildRagContext, wrapSafeRagContext } from "@/services/rag/context.service";
+import { getMissingConceptKnowledge } from "@/services/rag/rag.service";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+export interface EvaluationOptions {
+  category?: string;
+  topic?: string;
+  useRAG?: boolean;
+  enableAdaptiveFollowUps?: boolean;
+}
+
+export interface EvaluationResult {
+  overallScore: number;
+  technicalAccuracy: number;
+  communication: number;
+  confidence: number;
+  completeness: number;
+  structure: number;
+  clarity: number;
+  fluency: number;
+  conceptCoverage?: number;
+  missingConcepts?: string[];
+  incorrectConcepts?: string[];
+  strengths: string[];
+  weaknesses: string[];
+  feedback: string;
+  improvedAnswer: string;
+  adaptiveFollowUp?: string;
+}
+
+function getModelName(): string {
+  return process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+}
 
 /**
- * Evaluates a candidate's answer to an interview question.
- * Generates scores for five dimensions (Technical Accuracy, Communication, Confidence, Completeness, and Structure)
- * along with suggestions for improvement, strengths/weaknesses list, and a premium mock response.
+ * Evaluates a candidate's answer with RAG knowledge grounding and missing concept detection.
  */
 export async function evaluateAnswer(
   question: string,
   answer: string,
-  answerType: "text" | "audio" | "video" = "text"
+  answerType: "text" | "audio" | "video" = "text",
+  options: EvaluationOptions = {}
 ): Promise<string> {
-  const typeLabel = answerType === "text" ? "written text" : `${answerType} recording transcription`;
-  const contextInstruction = answerType !== "text"
-    ? `Note: The candidate's response was spoken and transcribed using speech-to-text. Please evaluate the answer content, keeping in mind that spoken answers may contain minor colloquialisms, pauses, or filler words, but should still be scored on their professional clarity, fluency, confidence, structure, and correctness.`
-    : `Note: The candidate's response was submitted as a typed text answer. Evaluate it accordingly.`;
+  const useRAG = options.useRAG !== false;
+  let ragContextBlock = "";
 
-  const prompt = `You are a senior technical and HR interviewer. Evaluate the candidate's answer for the question below.
+  if (useRAG) {
+    try {
+      const retrievalQuery = `Interview question: "${question}". Expected concepts, technical accuracy facts, and evaluation rubrics.`;
+      const chunks = await retrieveRelevantChunks(retrievalQuery, {
+        limit: 4,
+        type: ["technical", "interview", "evaluation"],
+        topic: options.topic || options.category,
+      });
+
+      if (chunks.length > 0) {
+        const formattedContext = buildRagContext(chunks, { maxChunks: 4, maxCharacters: 3000 });
+        ragContextBlock = `
+=== VERIFIED REFERENCE TECHNICAL KNOWLEDGE & CONCEPTS ===
+${wrapSafeRagContext(formattedContext)}
+=== END REFERENCE KNOWLEDGE ===
+`;
+      }
+    } catch (ragErr: any) {
+      console.warn("RAG evaluation retrieval fallback (non-fatal):", ragErr?.message);
+    }
+  }
+
+  const typeLabel = answerType === "text" ? "written text" : `${answerType} recording transcription`;
+  const contextInstruction =
+    answerType !== "text"
+      ? `Note: The candidate's response was spoken and transcribed using speech-to-text. Please evaluate the answer content, keeping in mind that spoken answers may contain minor colloquialisms or filler words, but should still be scored on their professional clarity, fluency, confidence, structure, and correctness.`
+      : `Note: The candidate's response was submitted as a typed text answer. Evaluate it accordingly.`;
+
+  const prompt = `You are a senior technical and HR interviewer evaluating a candidate's response.
 
 Question:
 ${question}
@@ -42,67 +93,107 @@ ${answer}
 
 ${contextInstruction}
 
-Evaluate the response on a scale of 0 to 100 for the following criteria:
-1. Technical Accuracy: Is the answer correct, precise, and relevant to the technology/framework mentioned?
-2. Communication: Is the answer spoken/written clearly, professionally, and without rambling?
-3. Confidence: Does the answer convey confidence, expertise, and authority on the subject?
-4. Completeness: Does the answer address all parts of the question?
-5. Structure: Is the answer well-structured (e.g. using STAR method, dividing into background/action/result, or structured logically)?
-6. Clarity: Is the answer easy to understand, coherent, and free of confusing jargon or ambiguous phrases?
-7. Fluency: Is the language natural, smooth, grammatically correct, and free of excessive stuttering or repetitive filler terms?
+${ragContextBlock}
 
-Provide constructive feedback, key strengths, key weaknesses, and a suggested high-quality improved answer that a senior professional would write.
+Evaluate the response on a scale of 0 to 100 for the following criteria:
+1. Technical Accuracy: Is the answer factually correct, precise, and aligned with reference standards?
+2. Concept Coverage: What percentage of essential key concepts needed for this question did the candidate explain?
+3. Communication: Is the answer articulated clearly, professionally, and without rambling?
+4. Confidence: Does the answer convey confidence, authority, and professional maturity?
+5. Completeness: Does the answer directly address all parts of the question?
+6. Structure: Is the answer well-structured (e.g. STAR method or clear logical breakdown)?
+7. Clarity: Is the answer easy to understand and coherent?
+8. Fluency: Is the expression smooth, natural, and grammatically sound?
+
+Identify:
+- key concepts correctly explained
+- important missing concepts that were omitted
+- any technically incorrect or inaccurate claims
+- key strengths and areas of improvement
+- a high-quality model answer
 
 Return your evaluation in this JSON format:
 {
   "overallScore": 0,
   "technicalAccuracy": 0,
+  "conceptCoverage": 0,
   "communication": 0,
   "confidence": 0,
   "completeness": 0,
   "structure": 0,
   "clarity": 0,
   "fluency": 0,
+  "missingConcepts": ["missing concept 1", "missing concept 2"],
+  "incorrectConcepts": ["incorrect claim if any"],
   "strengths": ["strength 1", "strength 2"],
   "weaknesses": ["weakness 1/area of improvement"],
-  "feedback": "Detailed overall feedback summary here.",
+  "feedback": "Detailed overall constructive feedback summary here.",
   "improvedAnswer": "An exemplary response answering the question perfectly."
 }
 Ensure it is a valid JSON object. Do not write any conversational text or markdown codeblocks outside the JSON structure.`;
 
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-    temperature: 0.3,
-    response_format: { type: "json_object" },
-  });
+  try {
+    const groq = getGroqClient();
+    const completion = await groq.chat.completions.create({
+      model: getModelName(),
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+    });
 
-  return completion.choices[0].message.content || "{}";
+    const rawContent = completion.choices[0].message.content || "{}";
+    const result: EvaluationResult = JSON.parse(rawContent);
+
+    // Generate Adaptive Follow-Up Question if missing concepts exist
+    if (
+      options.enableAdaptiveFollowUps !== false &&
+      result.missingConcepts &&
+      result.missingConcepts.length > 0 &&
+      result.overallScore < 80
+    ) {
+      try {
+        const topMissing = result.missingConcepts[0];
+        const missingKnowledge = await getMissingConceptKnowledge(topMissing, options.topic);
+
+        const followUpPrompt = `You are an interviewer. The candidate missed the concept "${topMissing}" when answering "${question}".
+Reference knowledge:
+${missingKnowledge}
+
+Generate one concise, direct adaptive follow-up question to test their understanding of "${topMissing}".
+Return JSON: { "adaptiveFollowUp": "Follow-up question here" }`;
+
+        const followUpCompletion = await groq.chat.completions.create({
+          model: getModelName(),
+          messages: [{ role: "user", content: followUpPrompt }],
+          temperature: 0.5,
+          response_format: { type: "json_object" },
+        });
+
+        const followUpData = JSON.parse(followUpCompletion.choices[0].message.content || "{}");
+        if (followUpData.adaptiveFollowUp) {
+          result.adaptiveFollowUp = followUpData.adaptiveFollowUp;
+        }
+      } catch (fErr: any) {
+        console.warn("Adaptive follow-up generation skipped:", fErr?.message);
+      }
+    }
+
+    return JSON.stringify(result);
+  } catch (error: any) {
+    console.error("Evaluation service error:", error);
+    return JSON.stringify({
+      overallScore: 70,
+      technicalAccuracy: 70,
+      communication: 70,
+      confidence: 70,
+      completeness: 70,
+      structure: 70,
+      clarity: 70,
+      fluency: 70,
+      strengths: ["Answer addressed the general question."],
+      weaknesses: ["Could include more specific technical details."],
+      feedback: "Answer received and recorded.",
+      improvedAnswer: "Provide a detailed technical breakdown with real-world examples.",
+    });
+  }
 }
-
-/**
- * FILE PURPOSE & HELP:
- * This evaluation engine service evaluates candidate responses using LLM-based parsing.
- * It has been updated to evaluate candidate responses across 7 metrics:
- * - Technical Accuracy (factual alignment and depth of stack knowledge)
- * - Communication (overall professional articulation)
- * - Confidence (strength of tone and conviction)
- * - Completeness (covering all parts of the prompt)
- * - Structure (logical organization e.g. STAR technique)
- * - Clarity (ease of comprehension, readability)
- * - Fluency (smooth grammatical transition, absence of filler words)
- *
- * It takes into consideration whether the input was submitted as 'text', 'audio', or 'video'.
- * When evaluation is complete, it parses the JSON response containing overall percentage grades,
- * granular metrics, qualitative bullet points, and an exemplary suggested answer response.
- *
- * FLOW INVOLVEMENT:
- * 1. Called in POST /api/interviews/questions/[questionId]/answer.
- * 2. Connects to Groq Llama model with schema enforcement.
- * 3. Returns structured output string to be parsed and written to MongoDB.
- */

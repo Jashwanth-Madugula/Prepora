@@ -5,6 +5,7 @@ PREPORA: AUTHENTICATION SYSTEM DOCUMENTATION
 This document details the architecture, data security, token lifecycle, and 
 file-by-file logic of Prepora's authentication and security system.
 
+
 --------------------------------------------------------------------------------
 1. AUTHENTICATION FLOW & SYSTEM ARCHITECTURE
 --------------------------------------------------------------------------------

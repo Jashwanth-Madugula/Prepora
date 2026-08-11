@@ -4,7 +4,6 @@
  *
  * Why this code exists:
  * Serves as the Next.js API serverless route endpoint responding to client HTTP fetch requests for this path.
- * 
  *
  * What problem it solves:
  * - Validates request inputs, manages rate-limiting rules, invokes business logic services, interacts with the database, and returns structured JSON responses and status codes to the frontend client.
@@ -56,7 +55,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST: Initializes a new interview session.
- * Generates custom AI questions based on interview configuration (Resume, Technical, or HR)
+ * Generates custom AI questions grounded in RAG technical knowledge, parsed resumes, and job descriptions,
  * and saves both the interview and generated questions to MongoDB.
  */
 export async function POST(request: NextRequest) {
@@ -71,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { type, role, difficulty, resumeId } = body;
+    const { type, role, difficulty, resumeId, useRAG = true } = body;
 
     if (!type || !["resume", "technical", "hr"].includes(type)) {
       return NextResponse.json(
@@ -82,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     let aiQuestions: any[] = [];
 
-    // Generate questions according to interview type selection
+    // Generate questions according to interview type selection with RAG grounding
     if (type === "resume") {
       if (!resumeId) {
         return NextResponse.json(
@@ -97,7 +96,11 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
-      aiQuestions = await generateResumeQuestions(resume.parsedData);
+      aiQuestions = await generateResumeQuestions(resume.parsedData, {
+        userId,
+        resumeId,
+        useRAG,
+      });
     } else if (type === "technical") {
       if (!role) {
         return NextResponse.json(
@@ -105,7 +108,11 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      aiQuestions = await generateTechnicalQuestions(role, difficulty || "medium");
+      aiQuestions = await generateTechnicalQuestions(role, difficulty || "medium", {
+        userId,
+        resumeId,
+        useRAG,
+      });
     } else if (type === "hr") {
       aiQuestions = await generateHRQuestions();
     }
@@ -150,12 +157,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-/**
- * FILE PURPOSE & HELP:
- * This API file implements the primary endpoint for mock interviews (GET /api/interviews and POST /api/interviews).
- * The GET handler retrieves past interviews for the authenticated user so they can view historical progress.
- * The POST handler handles interview creation: it takes the interview configuration, makes a call to the
- * AI question generation service to obtain 5 structured questions (with follow-ups), and saves the interview session
- * and question documents transactionally into MongoDB. This solves the question rotation issue on reload.
- */

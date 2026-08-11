@@ -1,19 +1,14 @@
 "use client";
 
-
 /**
  * @file src/app/dashboard/interviews/[id]/page.tsx
- * @category Utility / Helper
+ * @category Conduct / Report UI Page
  *
  * Why this code exists:
- * 
- * 
- *
- * What problem it solves:
- * - 
- *
- * How it works internally:
- * - 
+ * Interactive mock interview simulator screen and detailed evaluation scorecard dashboard.
+ * Supports text, audio, and video responses, RAG evaluation feedback, dynamic adaptive follow-up
+ * question generation where knowledge gaps dynamically queue conversational follow-up questions,
+ * and aggregate diagnostic analytics.
  */
 
 import React, { useEffect, useState } from "react";
@@ -47,12 +42,12 @@ const LOADING_MESSAGES = [
   "Uploading media recording to secure cloud...",
   "Transcribing spoken response via Groq Whisper...",
   "Connecting to AI evaluation engine...",
-  "Analyzing vocabulary, fluency and delivery clarity...",
+  "Retrieving verified RAG technical knowledge...",
   "Checking technical accuracy against reference concepts...",
+  "Detecting concept coverage & identifying missing concepts...",
+  "Generating targeted adaptive follow-up question...",
   "Assessing structural logic and completeness...",
-  "Scoring confidence indicators...",
-  "Formulating key strengths and development areas...",
-  "Drafting a high-quality suggested model response...",
+  "Drafting an exemplary suggested model response...",
   "Wrapping up detailed scorecards...",
 ];
 
@@ -134,6 +129,8 @@ export default function ActiveInterviewPage() {
     let payload: any = {
       answerType: responseMode,
       duration: responseMode === "text" ? 0 : recordedDuration,
+      useRAG: true,
+      enableAdaptiveFollowUps: true,
     };
 
     setIsEvaluating(true);
@@ -218,7 +215,7 @@ export default function ActiveInterviewPage() {
         payload.answer = transcribeData.transcript;
       }
 
-      setUploadProgress("Evaluating transcript with Groq Llama...");
+      setUploadProgress("Evaluating with RAG knowledge & detecting missing concepts...");
       const res = await fetch(`/api/interviews/questions/${activeQuestion._id}/answer`, {
         method: "POST",
         headers: {
@@ -231,7 +228,7 @@ export default function ActiveInterviewPage() {
 
       if (data.success) {
         // Update local questions list with evaluation results
-        const updatedQuestions = [...questions];
+        let updatedQuestions = [...questions];
         updatedQuestions[current] = {
           ...activeQuestion,
           answer: payload.answer || "",
@@ -248,15 +245,29 @@ export default function ActiveInterviewPage() {
           structureScore: data.evaluation.structure,
           clarityScore: data.evaluation.clarity,
           fluencyScore: data.evaluation.fluency,
+          conceptCoverage: data.evaluation.conceptCoverage || data.evaluation.completeness || 0,
+          missingConcepts: data.evaluation.missingConcepts || [],
+          incorrectConcepts: data.evaluation.incorrectConcepts || [],
+          adaptiveFollowUp: data.evaluation.adaptiveFollowUp || "",
           strengths: data.evaluation.strengths,
           weaknesses: data.evaluation.weaknesses,
           improvedAnswer: data.evaluation.improvedAnswer,
           speakingSpeed: data.question?.speakingSpeed || 0,
           fillerWordCount: data.question?.fillerWordCount || 0,
         };
+
+        // If a dynamic follow-up question was generated, dynamically insert it into the interview sequence
+        if (data.followUpQuestion) {
+          const alreadyInList = updatedQuestions.some((q) => q._id === data.followUpQuestion._id);
+          if (!alreadyInList) {
+            updatedQuestions.splice(current + 1, 0, data.followUpQuestion);
+            toast.info("🎯 Dynamic Follow-Up Question added to interview queue!");
+          }
+        }
+
         setQuestions(updatedQuestions);
         setEvaluation(data.evaluation);
-        toast.success("Answer evaluated successfully!");
+        toast.success("Answer evaluated with RAG knowledge!");
       } else {
         toast.error(data.message || "Failed to evaluate answer");
       }
@@ -383,9 +394,9 @@ export default function ActiveInterviewPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 p-6 rounded-2xl">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
-                Performance Scorecard
+                RAG Grounded Performance Scorecard
               </span>
-              <h1 className="text-2xl font-black mt-1">Mock Interview Analysis</h1>
+              <h1 className="text-2xl font-black mt-1">Mock Interview Diagnostic Analysis</h1>
               <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400 mt-2">
                 <span>Topic: <strong className="text-zinc-700 dark:text-zinc-300">{interview.role}</strong></span>
                 <span>•</span>
@@ -401,21 +412,26 @@ export default function ActiveInterviewPage() {
               </div>
               <div>
                 <div className="font-extrabold text-sm">Overall Evaluation</div>
-                <div className="text-xs text-zinc-400">Graded by AI Engine</div>
+                <div className="text-xs text-zinc-400">Graded by RAG Engine</div>
               </div>
             </div>
           </div>
 
           {/* Metric Breakdown Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
-            {/* Compute averages of sub-metrics for visual dashboard */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             {(() => {
               const metrics = [
                 {
                   label: "Technical Accuracy",
                   key: "technicalAccuracyScore",
-                  desc: "Depth of knowledge",
+                  desc: "Fact precision",
                   emoji: "💻",
+                },
+                {
+                  label: "Concept Coverage",
+                  key: "conceptCoverage",
+                  desc: "Required concepts",
+                  emoji: "🎯",
                 },
                 {
                   label: "Communication",
@@ -426,14 +442,14 @@ export default function ActiveInterviewPage() {
                 {
                   label: "Confidence",
                   key: "confidenceScore",
-                  desc: "Tone & assurance",
+                  desc: "Tone assurance",
                   emoji: "🔥",
                 },
                 {
                   label: "Completeness",
                   key: "completenessScore",
-                  desc: "Coverage of issue",
-                  emoji: "🎯",
+                  desc: "Scope coverage",
+                  emoji: "📊",
                 },
                 {
                   label: "Structure",
@@ -450,28 +466,28 @@ export default function ActiveInterviewPage() {
                 {
                   label: "Fluency",
                   key: "fluencyScore",
-                  desc: "Natural speech",
+                  desc: "Speech cadence",
                   emoji: "🌊",
                 },
               ];
 
               return metrics.map((m) => {
-                const total = questions.reduce((sum, q) => sum + (q[m.key] || 0), 0);
+                const total = questions.reduce((sum, q) => sum + (q[m.key] !== undefined ? q[m.key] : (m.key === "conceptCoverage" ? q.completenessScore : 0) || 0), 0);
                 const avg = questions.length > 0 ? Math.round(total / questions.length) : 0;
                 return (
                   <div
                     key={m.label}
-                    className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 flex flex-col justify-between"
+                    className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 flex flex-col justify-between"
                   >
                     <div>
-                      <span className="text-lg mb-1 block">{m.emoji}</span>
+                      <span className="text-base mb-1 block">{m.emoji}</span>
                       <h4 className="font-bold text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
                         {m.label}
                       </h4>
                       <p className="text-[9px] text-zinc-400 mt-0.5 leading-tight">{m.desc}</p>
                     </div>
                     <div className="mt-3">
-                      <div className="text-lg font-black">{avg}%</div>
+                      <div className="text-base font-black">{avg}%</div>
                       <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-1 rounded-full mt-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full ${getMetricBarColorClass(avg)}`}
@@ -555,10 +571,43 @@ export default function ActiveInterviewPage() {
                           </div>
                         </div>
 
+                        {/* Dynamic Adaptive Follow-up Question */}
+                        {q.adaptiveFollowUp && (
+                          <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/25 dark:border-indigo-900/40 dark:bg-indigo-950/20 space-y-1.5">
+                            <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                              <Sparkles className="w-4 h-4 text-indigo-500" />
+                              Dynamic Adaptive Follow-Up Question
+                            </div>
+                            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 leading-relaxed">
+                              "{q.adaptiveFollowUp}"
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Missing Concepts Badges */}
+                        {q.missingConcepts && q.missingConcepts.length > 0 && (
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+                              Omitted / Missing Concepts Identified by RAG
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {q.missingConcepts.map((mc: string, idx: number) => (
+                                <span
+                                  key={idx}
+                                  className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50"
+                                >
+                                  • {mc}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Metric scores breakdown */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 bg-zinc-50/50 dark:bg-zinc-950/10 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 bg-zinc-50/50 dark:bg-zinc-950/10 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
                           {[
                             { label: "Technical Accuracy", score: q.technicalAccuracyScore },
+                            { label: "Concept Coverage", score: q.conceptCoverage || q.completenessScore },
                             { label: "Communication", score: q.communicationScore },
                             { label: "Confidence", score: q.confidenceScore },
                             { label: "Completeness", score: q.completenessScore },
@@ -705,7 +754,7 @@ export default function ActiveInterviewPage() {
                   router.push("/dashboard/interviews");
                 }
               }}
-              className="text-sm font-semibold text-rose-500 hover:text-rose-600 transition"
+              className="text-sm font-semibold text-rose-500 hover:text-rose-600 transition cursor-pointer"
             >
               Exit Simulator
             </button>
@@ -889,7 +938,7 @@ export default function ActiveInterviewPage() {
             {isEvaluating && (
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-12 flex flex-col items-center justify-center text-center flex-1 shadow-sm min-h-[300px]">
                 <Loader2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin mb-6" />
-                <h3 className="font-bold text-lg mb-2">Analyzing Answer</h3>
+                <h3 className="font-bold text-lg mb-2">Analyzing Answer with RAG Engine</h3>
                 {uploadProgress ? (
                   <p className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 animate-pulse">
                     {uploadProgress}
@@ -925,6 +974,44 @@ export default function ActiveInterviewPage() {
                         </span>
                       </div>
 
+                      {/* Dynamic Adaptive Follow-Up Question Banner */}
+                      {data.adaptiveFollowUp && (
+                        <div className="p-4 rounded-2xl border-2 border-indigo-500/40 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent space-y-2 animate-fadeIn">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-indigo-500" />
+                            <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                              Dynamic Adaptive Follow-Up (Added to Interview Queue)
+                            </h4>
+                          </div>
+                          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-relaxed">
+                            "{data.adaptiveFollowUp}"
+                          </p>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            The AI identified an omitted concept in your response and generated this targeted follow-up question for you to answer next.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Missing Concepts Chips */}
+                      {data.missingConcepts && data.missingConcepts.length > 0 && (
+                        <div className="space-y-2 border-t border-zinc-100 dark:border-zinc-850 pt-4">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            Missing Key Concepts (RAG Detected)
+                          </h4>
+                          <div className="flex flex-wrap gap-1.5">
+                            {data.missingConcepts.map((mc: string, idx: number) => (
+                              <span
+                                key={idx}
+                                className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50"
+                              >
+                                {mc}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Display player for spoken responses on evaluated scorecard view */}
                       {data.answerType === "audio" && data.audioUrl && (
                         <div className="p-3 bg-zinc-50 dark:bg-zinc-950/45 rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -942,7 +1029,7 @@ export default function ActiveInterviewPage() {
                         </div>
                       )}
 
-                      {/* 7 metrics list sliders */}
+                      {/* 8 metrics list sliders */}
                       <div className="space-y-4">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                           Metric Breakdown
@@ -953,6 +1040,11 @@ export default function ActiveInterviewPage() {
                               label: "Technical Accuracy",
                               score: data.technicalAccuracyScore,
                               desc: "Fact checking & expertise",
+                            },
+                            {
+                              label: "Concept Coverage",
+                              score: data.conceptCoverage || data.completenessScore,
+                              desc: "Expected concepts coverage",
                             },
                             {
                               label: "Communication",
@@ -1090,10 +1182,19 @@ export default function ActiveInterviewPage() {
                         {current < questions.length - 1 ? (
                           <button
                             onClick={handleNextQuestion}
-                            className="flex items-center gap-1.5 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-semibold rounded-xl text-xs transition cursor-pointer"
+                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-semibold rounded-xl text-xs transition cursor-pointer shadow-sm"
                           >
-                            Next Question
-                            <ArrowRight className="w-4 h-4" />
+                            {data.adaptiveFollowUp ? (
+                              <>
+                                <span>Answer Dynamic Follow-Up</span>
+                                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                              </>
+                            ) : (
+                              <>
+                                <span>Next Question</span>
+                                <ArrowRight className="w-4 h-4" />
+                              </>
+                            )}
                           </button>
                         ) : (
                           <button
@@ -1123,15 +1224,3 @@ export default function ActiveInterviewPage() {
     </div>
   );
 }
-
-/**
- * FILE PURPOSE & HELP:
- * This page implements the interactive mock interview screen and the dynamic scorecard feedback.
- * - It retrieves the current active session state (with 5 pre-loaded questions).
- * - As the candidate works, it handles typing, word count analysis, and submissions.
- * - Submitting triggers a sequential AI loading state to mimic deep analysis.
- * - Displays overall percentage scores and granular visual grade bars for Communication, Accuracy, Confidence, Completeness, and Structure.
- * - Renders lists of Strengths, Weaknesses, and suggested improved templates.
- * - Allows proceeding step-by-step or finalizing the interview which calls the patch endpoint
- *   to calculate total aggregate statistics, saving results to the database and rendering the summary scorecard.
- */
