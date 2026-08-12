@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
       question: q.question,
       category: q.category || (type === "hr" ? "HR" : role || "General"),
       difficulty: q.difficulty || difficulty || "medium",
+      expectedConcepts: Array.isArray(q.expectedConcepts) ? q.expectedConcepts : [],
       followUps: q.followUps || [],
     }));
 

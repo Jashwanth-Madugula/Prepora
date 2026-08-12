@@ -15,9 +15,15 @@ export interface IInterviewQuestion extends Document {
   question: string;
   category: string;
   difficulty: "easy" | "medium" | "hard";
+  expectedConcepts?: string[];
   answer?: string;
   answerType?: "text" | "audio" | "video";
   transcript?: string;
+  transcriptSegments?: {
+    start: number;
+    end: number;
+    text: string;
+  }[];
   audioUrl?: string;
   videoUrl?: string;
   feedback?: string;
@@ -30,6 +36,7 @@ export interface IInterviewQuestion extends Document {
   clarityScore?: number;
   fluencyScore?: number;
   conceptCoverage?: number;
+  coveredConcepts?: string[];
   missingConcepts?: string[];
   incorrectConcepts?: string[];
   adaptiveFollowUp?: string;
@@ -39,6 +46,42 @@ export interface IInterviewQuestion extends Document {
   followUps?: string[];
   speakingSpeed?: number;
   fillerWordCount?: number;
+  audioAnalysis?: {
+    durationSeconds?: number;
+    speakingRate?: {
+      wordsPerMinute?: number;
+      speechDurationSeconds?: number;
+      totalDurationSeconds?: number;
+      wordCount?: number;
+      paceClassification?: string;
+    };
+    pauses?: {
+      pauseCount?: number;
+      totalPauseSeconds?: number;
+      averagePauseSeconds?: number;
+      pauseRatio?: number;
+      longPauseCount?: number;
+      pausePatternClassification?: string;
+    };
+    fillers?: {
+      totalCount?: number;
+      fillerRatePer100Words?: number;
+      detectedFillers?: Record<string, number>;
+      fillerClassification?: string;
+    };
+    energy?: {
+      meanRms?: number;
+      energyVariation?: number;
+      energyConsistencyScore?: number;
+    };
+    speechContinuity?: {
+      speechToSilenceRatio?: number;
+      hesitationCount?: number;
+      continuityScore?: number;
+    };
+    vocalDeliveryConfidenceScore?: number;
+    summaryText?: string;
+  };
 }
 
 const InterviewQuestionSchema = new Schema<IInterviewQuestion>(
@@ -62,6 +105,10 @@ const InterviewQuestionSchema = new Schema<IInterviewQuestion>(
       enum: ["easy", "medium", "hard"],
       default: "medium",
     },
+    expectedConcepts: {
+      type: [String],
+      default: [],
+    },
     answer: String,
     answerType: {
       type: String,
@@ -69,6 +116,13 @@ const InterviewQuestionSchema = new Schema<IInterviewQuestion>(
       default: "text",
     },
     transcript: String,
+    transcriptSegments: [
+      {
+        start: Number,
+        end: Number,
+        text: String,
+      },
+    ],
     audioUrl: String,
     videoUrl: String,
     feedback: String,
@@ -81,6 +135,7 @@ const InterviewQuestionSchema = new Schema<IInterviewQuestion>(
     clarityScore: Number,
     fluencyScore: Number,
     conceptCoverage: Number,
+    coveredConcepts: [String],
     missingConcepts: [String],
     incorrectConcepts: [String],
     adaptiveFollowUp: String,
@@ -90,6 +145,10 @@ const InterviewQuestionSchema = new Schema<IInterviewQuestion>(
     followUps: [String],
     speakingSpeed: Number,
     fillerWordCount: Number,
+    audioAnalysis: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -165,8 +165,8 @@ export default function ActiveInterviewPage() {
         }
         payload.audioUrl = uploadData.url;
 
-        // 2. Transcribe audio
-        setUploadProgress("Transcribing audio via Groq Whisper...");
+        // 2. Transcribe audio and extract acoustic features
+        setUploadProgress("Transcribing audio via Groq Whisper & analyzing speech delivery...");
         const transcribeRes = await fetch("/api/interviews/transcribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -178,6 +178,9 @@ export default function ActiveInterviewPage() {
         }
         payload.transcript = transcribeData.transcript;
         payload.answer = transcribeData.transcript;
+        payload.segments = transcribeData.segments || [];
+        payload.audioAnalysis = transcribeData.audioAnalysis || null;
+        payload.duration = transcribeData.duration || recordedDuration;
       } else if (responseMode === "video") {
         if (!recordedVideoBlob) {
           toast.warning("Please record a video response first.");
@@ -200,8 +203,8 @@ export default function ActiveInterviewPage() {
         }
         payload.videoUrl = uploadData.url;
 
-        // 2. Transcribe video
-        setUploadProgress("Transcribing video audio via Groq Whisper...");
+        // 2. Transcribe video and extract acoustic features
+        setUploadProgress("Transcribing video audio via Groq Whisper & analyzing speech delivery...");
         const transcribeRes = await fetch("/api/interviews/transcribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -213,6 +216,9 @@ export default function ActiveInterviewPage() {
         }
         payload.transcript = transcribeData.transcript;
         payload.answer = transcribeData.transcript;
+        payload.segments = transcribeData.segments || [];
+        payload.audioAnalysis = transcribeData.audioAnalysis || null;
+        payload.duration = transcribeData.duration || recordedDuration;
       }
 
       setUploadProgress("Evaluating with RAG knowledge & detecting missing concepts...");
@@ -239,19 +245,21 @@ export default function ActiveInterviewPage() {
           score: data.evaluation.overallScore,
           feedback: data.evaluation.feedback,
           technicalAccuracyScore: data.evaluation.technicalAccuracy,
+          conceptCoverage: data.evaluation.conceptCoverage || 0,
           communicationScore: data.evaluation.communication,
           confidenceScore: data.evaluation.confidence,
           completenessScore: data.evaluation.completeness,
           structureScore: data.evaluation.structure,
           clarityScore: data.evaluation.clarity,
           fluencyScore: data.evaluation.fluency,
-          conceptCoverage: data.evaluation.conceptCoverage || data.evaluation.completeness || 0,
+          coveredConcepts: data.evaluation.coveredConcepts || [],
           missingConcepts: data.evaluation.missingConcepts || [],
           incorrectConcepts: data.evaluation.incorrectConcepts || [],
           adaptiveFollowUp: data.evaluation.adaptiveFollowUp || "",
           strengths: data.evaluation.strengths,
           weaknesses: data.evaluation.weaknesses,
           improvedAnswer: data.evaluation.improvedAnswer,
+          audioAnalysis: data.question?.audioAnalysis || payload.audioAnalysis || null,
           speakingSpeed: data.question?.speakingSpeed || 0,
           fillerWordCount: data.question?.fillerWordCount || 0,
         };
@@ -267,7 +275,7 @@ export default function ActiveInterviewPage() {
 
         setQuestions(updatedQuestions);
         setEvaluation(data.evaluation);
-        toast.success("Answer evaluated with RAG knowledge!");
+        toast.success("Answer evaluated with RAG knowledge & speech analytics!");
       } else {
         toast.error(data.message || "Failed to evaluate answer");
       }
@@ -417,6 +425,70 @@ export default function ActiveInterviewPage() {
             </div>
           </div>
 
+          {/* Diagnostic Overview Overview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">
+                  Content Mastery Score
+                </span>
+                <h3 className="text-xl font-black mt-1">
+                  {(() => {
+                    const tech = questions.reduce((s, q) => s + (q.technicalAccuracyScore || 0), 0);
+                    const cov = questions.reduce((s, q) => s + (q.conceptCoverage || q.completenessScore || 0), 0);
+                    const comp = questions.reduce((s, q) => s + (q.completenessScore || 0), 0);
+                    const struc = questions.reduce((s, q) => s + (q.structureScore || 0), 0);
+                    const count = questions.length || 1;
+                    return Math.round((tech + cov + comp + struc) / (count * 4));
+                  })()}%
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Average across Technical Accuracy, Concept Coverage, Completeness, and Structure.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-500">
+                  Communication & Delivery Score
+                </span>
+                <h3 className="text-xl font-black mt-1">
+                  {(() => {
+                    const comm = questions.reduce((s, q) => s + (q.communicationScore || 0), 0);
+                    const clar = questions.reduce((s, q) => s + (q.clarityScore || 0), 0);
+                    const flu = questions.reduce((s, q) => s + (q.fluencyScore || 0), 0);
+                    const conf = questions.reduce((s, q) => s + (q.confidenceScore || 0), 0);
+                    const count = questions.length || 1;
+                    return Math.round((comm + clar + flu + conf) / (count * 4));
+                  })()}%
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Average across Articulation, Clarity, Fluency, and Delivery Confidence.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">
+                  RAG Concept Grounding
+                </span>
+                <h3 className="text-xl font-black mt-1">
+                  {(() => {
+                    const totalExpected = questions.reduce((s, q) => s + (q.expectedConcepts?.length || 0), 0);
+                    const totalCovered = questions.reduce((s, q) => s + (q.coveredConcepts?.length || 0), 0);
+                    if (totalExpected === 0) return "100%";
+                    return `${Math.round((totalCovered / totalExpected) * 100)}%`;
+                  })()}
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  Percentage of verified reference concepts satisfactorily demonstrated.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Metric Breakdown Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             {(() => {
@@ -477,7 +549,7 @@ export default function ActiveInterviewPage() {
                 return (
                   <div
                     key={m.label}
-                    className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 flex flex-col justify-between"
+                    className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 flex flex-col justify-between shadow-sm"
                   >
                     <div>
                       <span className="text-base mb-1 block">{m.emoji}</span>
@@ -500,6 +572,71 @@ export default function ActiveInterviewPage() {
               });
             })()}
           </div>
+
+          {/* Speech Delivery Diagnostics Panel (If spoken answers exist) */}
+          {(() => {
+            const audioQuestions = questions.filter((q) => q.answerType !== "text" && (q.audioAnalysis || q.speakingSpeed));
+            if (audioQuestions.length === 0) return null;
+
+            const avgWpm = Math.round(
+              audioQuestions.reduce((s, q) => s + (q.audioAnalysis?.speakingRate?.wordsPerMinute || q.speakingSpeed || 0), 0) /
+                audioQuestions.length
+            );
+            const totalFillers = audioQuestions.reduce(
+              (s, q) => s + (q.audioAnalysis?.fillers?.totalCount || q.fillerWordCount || 0),
+              0
+            );
+            const avgFillerRate = Math.round(
+              (audioQuestions.reduce((s, q) => s + (q.audioAnalysis?.fillers?.fillerRatePer100Words || 0), 0) /
+                audioQuestions.length) *
+                10
+            ) / 10;
+            const totalPauses = audioQuestions.reduce(
+              (s, q) => s + (q.audioAnalysis?.pauses?.pauseCount || 0),
+              0
+            );
+            const avgDeliveryConf = Math.round(
+              audioQuestions.reduce(
+                (s, q) => s + (q.audioAnalysis?.vocalDeliveryConfidenceScore || q.confidenceScore || 0),
+                0
+              ) / audioQuestions.length
+            );
+
+            return (
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 p-6 rounded-2xl shadow-sm space-y-4">
+                <div className="flex items-center gap-2">
+                  <Mic className="w-5 h-5 text-indigo-500" />
+                  <h3 className="text-lg font-bold">Empirical Speech & Acoustic Delivery Diagnostics</h3>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-3.5 bg-zinc-50 dark:bg-zinc-950/40 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50">
+                    <span className="text-[10px] uppercase font-bold text-zinc-400">Average Speaking Pace</span>
+                    <div className="text-lg font-black mt-0.5">{avgWpm} WPM</div>
+                    <span className="text-[10px] text-zinc-500">Target: 130 - 165 WPM</span>
+                  </div>
+                  <div className="p-3.5 bg-zinc-50 dark:bg-zinc-950/40 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50">
+                    <span className="text-[10px] uppercase font-bold text-zinc-400">Filler Word Density</span>
+                    <div className="text-lg font-black mt-0.5 text-amber-600 dark:text-amber-400">
+                      {avgFillerRate}/100w ({totalFillers} total)
+                    </div>
+                    <span className="text-[10px] text-zinc-500">Target: &lt; 2.0 / 100w</span>
+                  </div>
+                  <div className="p-3.5 bg-zinc-50 dark:bg-zinc-950/40 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50">
+                    <span className="text-[10px] uppercase font-bold text-zinc-400">Total Measured Pauses</span>
+                    <div className="text-lg font-black mt-0.5">{totalPauses} pauses</div>
+                    <span className="text-[10px] text-zinc-500">Gaps &gt;= 0.5s</span>
+                  </div>
+                  <div className="p-3.5 bg-zinc-50 dark:bg-zinc-950/40 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50">
+                    <span className="text-[10px] uppercase font-bold text-zinc-400">Delivery Confidence</span>
+                    <div className="text-lg font-black mt-0.5 text-indigo-600 dark:text-indigo-400">
+                      {avgDeliveryConf}%
+                    </div>
+                    <span className="text-[10px] text-zinc-500">Acoustic Consistency</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Question Breakdown Details */}
           <div className="space-y-4">
@@ -524,9 +661,16 @@ export default function ActiveInterviewPage() {
                           <h4 className="font-bold text-zinc-800 dark:text-zinc-200 text-base leading-snug">
                             {q.question}
                           </h4>
-                          <span className="inline-block px-2 py-0.5 mt-2 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-medium text-zinc-500 uppercase tracking-wide">
-                            {q.category}
-                          </span>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="inline-block px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-medium text-zinc-500 uppercase tracking-wide">
+                              {q.category}
+                            </span>
+                            {q.answerType && (
+                              <span className="inline-block px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
+                                {q.answerType}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -548,6 +692,32 @@ export default function ActiveInterviewPage() {
 
                     {isExpanded && (
                       <div className="px-6 pb-6 pt-2 border-t border-zinc-100 dark:border-zinc-800/50 space-y-6 animate-fadeIn">
+                        {/* Expected Concepts Rubric */}
+                        {q.expectedConcepts && q.expectedConcepts.length > 0 && (
+                          <div className="p-3.5 bg-zinc-50 dark:bg-zinc-950/40 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50 space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                              Expected Concept Rubric (RAG Grounded)
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {q.expectedConcepts.map((ec: string, idx: number) => {
+                                const isCovered = q.coveredConcepts?.includes(ec);
+                                return (
+                                  <span
+                                    key={idx}
+                                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                      isCovered
+                                        ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/50"
+                                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                                    }`}
+                                  >
+                                    {isCovered ? "✓" : "○"} {ec}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Candidate Answer */}
                         <div className="space-y-2">
                           <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -576,7 +746,7 @@ export default function ActiveInterviewPage() {
                           <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/25 dark:border-indigo-900/40 dark:bg-indigo-950/20 space-y-1.5">
                             <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                               <Sparkles className="w-4 h-4 text-indigo-500" />
-                              Dynamic Adaptive Follow-Up Question
+                              Dynamic Adaptive Follow-Up Question (Targeting Missing Concepts)
                             </div>
                             <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 leading-relaxed">
                               "{q.adaptiveFollowUp}"
@@ -584,36 +754,56 @@ export default function ActiveInterviewPage() {
                           </div>
                         )}
 
-                        {/* Missing Concepts Badges */}
-                        {q.missingConcepts && q.missingConcepts.length > 0 && (
-                          <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
-                              Omitted / Missing Concepts Identified by RAG
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {q.missingConcepts.map((mc: string, idx: number) => (
-                                <span
-                                  key={idx}
-                                  className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50"
-                                >
-                                  • {mc}
-                                </span>
-                              ))}
+                        {/* Covered & Missing Concepts Badges */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {q.coveredConcepts && q.coveredConcepts.length > 0 && (
+                            <div className="space-y-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                                Covered Concepts Explained
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {q.coveredConcepts.map((cc: string, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50"
+                                  >
+                                    ✓ {cc}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Metric scores breakdown */}
+                          {q.missingConcepts && q.missingConcepts.length > 0 && (
+                            <div className="space-y-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+                                Omitted / Missing Concepts
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {q.missingConcepts.map((mc: string, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50"
+                                  >
+                                    • {mc}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 8-Metric scores breakdown */}
                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 bg-zinc-50/50 dark:bg-zinc-950/10 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
                           {[
                             { label: "Technical Accuracy", score: q.technicalAccuracyScore },
                             { label: "Concept Coverage", score: q.conceptCoverage || q.completenessScore },
-                            { label: "Communication", score: q.communicationScore },
-                            { label: "Confidence", score: q.confidenceScore },
                             { label: "Completeness", score: q.completenessScore },
                             { label: "Structure", score: q.structureScore },
+                            { label: "Communication", score: q.communicationScore },
                             { label: "Clarity", score: q.clarityScore },
                             { label: "Fluency", score: q.fluencyScore },
+                            { label: "Confidence", score: q.confidenceScore },
                           ].map((item) => (
                             <div key={item.label}>
                               <div className="text-[10px] text-zinc-400 leading-tight font-medium">
@@ -632,16 +822,32 @@ export default function ActiveInterviewPage() {
                           ))}
                         </div>
 
-                        {/* Spoken metrics details on summary view */}
-                        {q.answerType !== "text" && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-50/50 dark:bg-zinc-950/10 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
+                        {/* Spoken acoustic details on question breakdown view */}
+                        {q.answerType !== "text" && q.audioAnalysis && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-zinc-50/50 dark:bg-zinc-950/10 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
                             <div>
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-450 dark:text-zinc-400 font-semibold">Speaking Pace</span>
-                              <p className="text-sm font-extrabold mt-0.5 text-zinc-800 dark:text-zinc-200">{q.speakingSpeed || 0} Words / Min</p>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Pace</span>
+                              <p className="text-sm font-extrabold mt-0.5 text-zinc-800 dark:text-zinc-200">
+                                {q.audioAnalysis.speakingRate?.wordsPerMinute || q.speakingSpeed || 0} WPM ({q.audioAnalysis.speakingRate?.paceClassification || "optimal"})
+                              </p>
                             </div>
                             <div>
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-455 dark:text-zinc-400 font-semibold">Filler Occurrences</span>
-                              <p className="text-sm font-extrabold mt-0.5 text-amber-600 dark:text-amber-450">{q.fillerWordCount || 0} words used</p>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Fillers</span>
+                              <p className="text-sm font-extrabold mt-0.5 text-amber-600 dark:text-amber-400">
+                                {q.audioAnalysis.fillers?.totalCount || q.fillerWordCount || 0} ({q.audioAnalysis.fillers?.fillerRatePer100Words || 0}/100w)
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Pauses</span>
+                              <p className="text-sm font-extrabold mt-0.5 text-zinc-800 dark:text-zinc-200">
+                                {q.audioAnalysis.pauses?.pauseCount || 0} ({q.audioAnalysis.pauses?.totalPauseSeconds || 0}s)
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Vocal Confidence</span>
+                              <p className="text-sm font-extrabold mt-0.5 text-indigo-600 dark:text-indigo-400">
+                                {q.audioAnalysis.vocalDeliveryConfidenceScore || q.confidenceScore || 0}%
+                              </p>
                             </div>
                           </div>
                         )}

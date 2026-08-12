@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbConnect } from "@/lib/db";
 import { getCurrentUserId } from "@/lib/auth";
+import { analyzeAudioEvidence, TranscriptSegment } from "@/services/audio-analysis.service";
 import Groq from "groq-sdk";
 import fs from "fs";
 import path from "path";
@@ -25,16 +26,9 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 /**
  * POST /api/interviews/transcribe
- * Accepts an audio URL, fetches the media content, saves it locally as a temp file,
- * and calls the Groq Whisper Speech-to-Text API to return a text transcript.
- *
- * FLOW:
- * 1. Frontend provides audioUrl (pointing to Cloudinary).
- * 2. Route fetches the file buffer from Cloudinary.
- * 3. Buffer is written to a temporary workspace directory (src/temp).
- * 4. Temporary stream is fed to Groq's whisper-large-v3 transcription service.
- * 5. Temp file is unlinked immediately in a finally block.
- * 6. Returns `{ success: true, transcript }`.
+ * Accepts an audio/video URL, fetches media content, saves locally as a temp file,
+ * calls Groq Whisper with verbose_json timestamps, and performs server-side acoustic
+ * feature extraction (WPM, pause count/ratio, filler frequency, RMS energy stability).
  */
 export async function POST(request: NextRequest) {
   let tempFilePath = "";
@@ -60,30 +54,67 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Download audio file from Cloudinary URL
+    // Download media file from Cloudinary URL
     const response = await fetch(audioUrl);
     if (!response.ok) {
-      throw new Error(`Failed to fetch audio from source: ${response.statusText}`);
+      throw new Error(`Failed to fetch media from source: ${response.statusText}`);
     }
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
     // Prepare temp folder inside OS temporary directory
     const tempDir = os.tmpdir();
-
     tempFilePath = path.join(tempDir, `transcribe-${userId}-${Date.now()}.webm`);
     fs.writeFileSync(tempFilePath, buffer);
 
-    // Call Groq Whisper service
-    const transcription = await groq.audio.transcriptions.create({
-      file: fs.createReadStream(tempFilePath),
-      model: "whisper-large-v3",
-      response_format: "json",
+    // Call Groq Whisper service with verbose_json for segment timestamps
+    let transcription: any;
+    try {
+      transcription = await groq.audio.transcriptions.create({
+        file: fs.createReadStream(tempFilePath),
+        model: "whisper-large-v3",
+        response_format: "verbose_json",
+        timestamp_granularities: ["segment"],
+      });
+    } catch (verboseErr: any) {
+      console.warn("Verbose JSON Whisper call failed, falling back to standard json format:", verboseErr?.message);
+      transcription = await groq.audio.transcriptions.create({
+        file: fs.createReadStream(tempFilePath),
+        model: "whisper-large-v3",
+        response_format: "json",
+      });
+    }
+
+    const transcriptText = transcription.text || "";
+    const rawSegments: any[] = transcription.segments || [];
+
+    const segments: TranscriptSegment[] = rawSegments.map((s: any, idx: number) => ({
+      id: s.id ?? idx,
+      start: typeof s.start === "number" ? Math.round(s.start * 100) / 100 : 0,
+      end: typeof s.end === "number" ? Math.round(s.end * 100) / 100 : 0,
+      text: s.text || "",
+    }));
+
+    const durationSeconds = typeof transcription.duration === "number"
+      ? transcription.duration
+      : segments.length > 0
+        ? segments[segments.length - 1].end
+        : 0;
+
+    // Perform server-side acoustic and speech delivery analysis
+    const audioAnalysis = analyzeAudioEvidence({
+      transcript: transcriptText,
+      segments,
+      durationSeconds,
+      audioBuffer: buffer,
     });
 
     return NextResponse.json({
       success: true,
-      transcript: transcription.text,
+      transcript: transcriptText,
+      segments,
+      duration: audioAnalysis.durationSeconds,
+      audioAnalysis,
     });
   } catch (error: any) {
     console.error("Transcription Route Error:", error);

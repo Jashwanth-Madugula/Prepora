@@ -13,7 +13,8 @@ import mongoose from "mongoose";
 import { dbConnect } from "@/lib/db";
 import { getCurrentUserId } from "@/lib/auth";
 import InterviewQuestion from "@/models/interview-question.model";
-import { evaluateAnswer } from "@/services/interview-evaluation.service";
+import { evaluateMultimodalAnswer } from "@/services/interview-evaluation.service";
+import { analyzeAudioEvidence } from "@/services/audio-analysis.service";
 
 interface RouteParams {
   params: Promise<{
@@ -56,13 +57,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       audioUrl,
       videoUrl,
       transcript,
+      segments = [],
+      audioAnalysis: incomingAudioAnalysis,
       duration = 0,
       useRAG = true,
       enableAdaptiveFollowUps = true,
     } = body;
 
     const type = answerType || "text";
-    let contentToEvaluate = answer || transcript || "";
+    const contentToEvaluate = (answer || transcript || "").trim();
 
     if (!contentToEvaluate && type === "text") {
       return NextResponse.json(
@@ -78,85 +81,86 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Audio / speech cadence metrics
-    let speakingSpeed = 0;
-    if (duration > 0 && contentToEvaluate) {
-      const wordCount = contentToEvaluate.trim().split(/\s+/).length;
-      const minutes = duration / 60;
-      speakingSpeed = Math.round(wordCount / minutes);
-    }
-
-    const fillerWords = ["um", "uh", "like", "basically", "actually", "literally", "you know", "i mean"];
-    let fillerWordCount = 0;
-    if (contentToEvaluate) {
-      const words = contentToEvaluate.toLowerCase();
-      fillerWords.forEach((word) => {
-        const regex = new RegExp(`\\b${word}\\b`, "g");
-        const matches = words.match(regex);
-        if (matches) {
-          fillerWordCount += matches.length;
-        }
+    // Resolve or compute audio analysis for spoken responses
+    let resolvedAudioAnalysis = incomingAudioAnalysis || null;
+    if (type !== "text" && (!resolvedAudioAnalysis || !resolvedAudioAnalysis.speakingRate)) {
+      resolvedAudioAnalysis = analyzeAudioEvidence({
+        transcript: contentToEvaluate,
+        segments,
+        durationSeconds: duration,
       });
     }
 
-    // Call RAG AI service to evaluate the response & detect missing concepts
-    const evaluationString = await evaluateAnswer(
-      question.question,
-      contentToEvaluate.trim(),
-      type,
-      {
-        category: question.category,
-        topic: question.category,
-        useRAG,
-        enableAdaptiveFollowUps,
-      }
-    );
-    const result = JSON.parse(evaluationString);
+    // Call evidence-based Multimodal Evaluation Service
+    const evalResult = await evaluateMultimodalAnswer({
+      question: question.question,
+      answerType: type,
+      transcript: contentToEvaluate,
+      transcriptSegments: segments,
+      audioAnalysis: resolvedAudioAnalysis || undefined,
+      expectedConcepts: question.expectedConcepts || [],
+      category: question.category,
+      topic: question.category,
+      useRAG,
+      enableAdaptiveFollowUps,
+      userId,
+    });
 
-    // Save candidate answers and metrics into the database
-    question.answer = contentToEvaluate.trim();
+    // Save candidate answers, metrics, and evidence into the database
+    question.answer = contentToEvaluate;
     question.answerType = type;
-    question.transcript = type === "text" ? "" : (transcript || "");
+    question.transcript = type === "text" ? "" : contentToEvaluate;
+    question.transcriptSegments = segments;
     question.audioUrl = audioUrl || "";
     question.videoUrl = videoUrl || "";
 
-    question.score = result.overallScore || 0;
-    question.feedback = result.feedback || "";
-    question.technicalAccuracyScore = result.technicalAccuracy || 0;
-    question.communicationScore = result.communication || 0;
-    question.confidenceScore = result.confidence || 0;
-    question.completenessScore = result.completeness || 0;
-    question.structureScore = result.structure || 0;
-    question.clarityScore = result.clarity || 0;
-    question.fluencyScore = result.fluency || 0;
-    question.conceptCoverage = result.conceptCoverage || result.completeness || 0;
-    question.missingConcepts = result.missingConcepts || [];
-    question.incorrectConcepts = result.incorrectConcepts || [];
-    question.adaptiveFollowUp = result.adaptiveFollowUp || "";
-    
-    question.strengths = result.strengths || [];
-    question.weaknesses = result.weaknesses || [];
-    question.improvedAnswer = result.improvedAnswer || "";
+    question.score = evalResult.overallScore || 0;
+    question.feedback = evalResult.feedback || "";
+    question.technicalAccuracyScore = evalResult.technicalAccuracy || 0;
+    question.conceptCoverage = evalResult.conceptCoverage || 0;
+    question.communicationScore = evalResult.communication || 0;
+    question.confidenceScore = evalResult.confidence || 0;
+    question.completenessScore = evalResult.completeness || 0;
+    question.structureScore = evalResult.structure || 0;
+    question.clarityScore = evalResult.clarity || 0;
+    question.fluencyScore = evalResult.fluency || 0;
 
-    question.speakingSpeed = speakingSpeed;
-    question.fillerWordCount = fillerWordCount;
+    question.coveredConcepts = evalResult.coveredConcepts || [];
+    question.missingConcepts = evalResult.missingConcepts || [];
+    question.incorrectConcepts = evalResult.incorrectConcepts || [];
+    question.adaptiveFollowUp = evalResult.adaptiveFollowUp || "";
+    
+    question.strengths = evalResult.strengths || [];
+    question.weaknesses = evalResult.weaknesses || [];
+    question.improvedAnswer = evalResult.improvedAnswer || "";
+
+    // Speech analytics fields
+    if (resolvedAudioAnalysis) {
+      question.audioAnalysis = resolvedAudioAnalysis;
+      question.speakingSpeed = resolvedAudioAnalysis.speakingRate.wordsPerMinute;
+      question.fillerWordCount = resolvedAudioAnalysis.fillers.totalCount;
+    } else {
+      question.speakingSpeed = 0;
+      question.fillerWordCount = 0;
+    }
 
     await question.save();
 
     // DYNAMIC NEXT QUESTION: If an adaptive follow-up was generated, dynamically insert it as an interactive next question
     let followUpQuestionDoc: any = null;
-    if (result.adaptiveFollowUp && enableAdaptiveFollowUps !== false && (result.overallScore || 0) < 95) {
+    if (evalResult.adaptiveFollowUp && enableAdaptiveFollowUps !== false && (evalResult.overallScore || 0) < 95) {
       const existingFollowUp = await InterviewQuestion.findOne({
         interviewId: question.interviewId,
-        question: result.adaptiveFollowUp,
+        question: evalResult.adaptiveFollowUp,
       });
 
       if (!existingFollowUp) {
         followUpQuestionDoc = await InterviewQuestion.create({
           interviewId: question.interviewId,
-          question: result.adaptiveFollowUp,
+          question: evalResult.adaptiveFollowUp,
           category: question.category,
           difficulty: question.difficulty,
+          expectedConcepts: evalResult.missingConcepts.slice(0, 4),
           followUps: ["Explain the underlying mechanism", "Discuss real-world practical trade-offs"],
         });
       } else {
@@ -166,7 +170,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({
       success: true,
-      evaluation: result,
+      evaluation: evalResult,
       question,
       followUpQuestion: followUpQuestionDoc,
     });

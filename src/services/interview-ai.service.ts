@@ -26,6 +26,7 @@ function getModelName(): string {
 /**
  * Generates questions based on parsed resume data and RAG grounding.
  * Focuses on projects, skills, experience, and certifications.
+ * Derives an expected concept rubric for every question.
  */
 export async function generateResumeQuestions(
   resumeData: any,
@@ -66,6 +67,7 @@ ${ragResult.safePromptContext}
 Focus on their verified skills, projects, experience, and certifications.
 For projects, ask questions about architecture, challenges, trade-offs, or why specific technologies were selected.
 For skills, ask deep-dive conceptual and practical questions.
+For each question, define 4 to 7 specific "expectedConcepts" (key technical/practical concepts or principles a comprehensive answer must cover).
 Do NOT invent projects or tools not mentioned in the resume.
 
 Resume Data:
@@ -80,6 +82,12 @@ Return your response in this JSON format:
       "question": "Question text here",
       "category": "Project/Skill/Experience/Certification",
       "difficulty": "easy/medium/hard",
+      "expectedConcepts": [
+        "key concept 1",
+        "key concept 2",
+        "key concept 3",
+        "key concept 4"
+      ],
       "followUps": [
         "Follow-up question 1",
         "Follow-up question 2"
@@ -99,7 +107,13 @@ Ensure it is a valid JSON object. Do not include any other markdown text or comm
     });
 
     const data = JSON.parse(completion.choices[0].message.content || "{}");
-    return data.questions || [];
+    const rawQuestions = data.questions || [];
+    return rawQuestions.map((q: any) => ({
+      ...q,
+      expectedConcepts: Array.isArray(q.expectedConcepts) && q.expectedConcepts.length > 0
+        ? q.expectedConcepts
+        : ["problem solving", "technical implementation", "architecture trade-offs", "project impact"],
+    }));
   } catch (error) {
     console.error("Failed to generate resume questions:", error);
     return [];
@@ -108,6 +122,7 @@ Ensure it is a valid JSON object. Do not include any other markdown text or comm
 
 /**
  * Generates technical questions grounded in RAG technical knowledge, candidate resume, and JD.
+ * Defines 4 to 8 expected concepts for each technical question.
  */
 export async function generateTechnicalQuestions(
   topic: string,
@@ -153,6 +168,7 @@ ${ragResult.safePromptContext}
 The difficulty level should be: ${difficulty}.
 Ground all factual questions in the verified reference knowledge provided.
 Make sure questions test practical reasoning, architectural trade-offs, and real-world understanding.
+For each question, define 4 to 8 specific "expectedConcepts" (essential technical principles, mechanics, steps, or terminology that a complete answer must address).
 For each question, provide 2 targeted follow-up questions to test deeper knowledge.
 
 ${ragContextBlock}
@@ -164,6 +180,12 @@ Return your response in this JSON format:
       "question": "Technical question text here",
       "category": "${topic}",
       "difficulty": "${difficulty}",
+      "expectedConcepts": [
+        "expected concept 1",
+        "expected concept 2",
+        "expected concept 3",
+        "expected concept 4"
+      ],
       "followUps": [
         "Follow-up question 1",
         "Follow-up question 2"
@@ -183,7 +205,13 @@ Ensure it is a valid JSON object. Do not include any other markdown text or comm
     });
 
     const data = JSON.parse(completion.choices[0].message.content || "{}");
-    return data.questions || [];
+    const rawQuestions = data.questions || [];
+    return rawQuestions.map((q: any) => ({
+      ...q,
+      expectedConcepts: Array.isArray(q.expectedConcepts) && q.expectedConcepts.length > 0
+        ? q.expectedConcepts
+        : [`${topic} core architecture`, "underlying mechanics", "performance trade-offs", "best practices"],
+    }));
   } catch (error) {
     console.error("Failed to parse technical questions JSON:", error);
     return [];
@@ -191,10 +219,11 @@ Ensure it is a valid JSON object. Do not include any other markdown text or comm
 }
 
 /**
- * Generates behavioral and situational HR questions.
+ * Generates behavioral and situational HR questions with expected behavioral competency rubrics.
  */
 export async function generateHRQuestions(): Promise<any[]> {
   const prompt = `You are a professional HR manager. Generate exactly 5 common behavioral HR questions (e.g. "Tell me about yourself", "Why should we hire you?", "Strengths and weaknesses", "Describe a conflict situation and how you resolved it", "Give an example of a leadership role you took").
+For each question, define 4 to 6 "expectedConcepts" (behavioral elements, structured response points like Situation/Task/Action/Result, self-awareness, leadership, communication).
 For each question, add 2 follow-up questions to guide the conversation.
 
 Return your response in this JSON format:
@@ -204,6 +233,12 @@ Return your response in this JSON format:
       "question": "HR behavioral question text here",
       "category": "Behavioral",
       "difficulty": "medium",
+      "expectedConcepts": [
+        "clear context & situation",
+        "ownership & specific actions taken",
+        "measurable outcome or reflection",
+        "professional maturity"
+      ],
       "followUps": [
         "Follow-up question 1",
         "Follow-up question 2"
@@ -223,7 +258,13 @@ Ensure it is a valid JSON object. Do not include any other markdown text or comm
     });
 
     const data = JSON.parse(completion.choices[0].message.content || "{}");
-    return data.questions || [];
+    const rawQuestions = data.questions || [];
+    return rawQuestions.map((q: any) => ({
+      ...q,
+      expectedConcepts: Array.isArray(q.expectedConcepts) && q.expectedConcepts.length > 0
+        ? q.expectedConcepts
+        : ["Situation & Task context", "Action & Ownership", "Result & Reflection", "Professional Communication"],
+    }));
   } catch (error) {
     console.error("Failed to parse HR questions JSON:", error);
     return [];
