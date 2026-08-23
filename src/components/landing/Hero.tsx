@@ -1,153 +1,158 @@
 "use client";
 
-
-/**
- * @file src/components/landing/Hero.tsx
- * @category React UI Component
- *
- * Why this code exists:
- * Renders a visual UI element or widget inside the candidate's application view.
- * 
- *
- * What problem it solves:
- * - Constructs modular, interactive interface components (like forms, buttons, timers, code-editors) keeping state reactive and responsive to candidate interactions.
- *
- * How it works internally:
- * - Implements a TypeScript React function component combining Tailwind CSS styling, React hooks (useState, useEffect, useMemo), animations (framer-motion), and callback events.
- */
-
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion, Variants } from "framer-motion";
-import { Sparkles, ArrowRight, Play } from "lucide-react";
+import { ArrowRight, Terminal, Video, FileText, BarChart2, BookOpen, User, Sparkles } from "lucide-react";
 
 interface HeroProps {
   isLoggedIn: boolean;
 }
 
 export default function Hero({ isLoggedIn }: HeroProps) {
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.15,
-        delayChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants: Variants = {
-    hidden: { y: 30, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: { type: "spring", stiffness: 100, damping: 15 },
-    },
-  };
-
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 pt-32 pb-24 overflow-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-950 dark:text-white select-none transition-colors duration-200">
-      
-      {/* Background Grid and Radial Glows */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e4e4e7_1px,transparent_1px),linear-gradient(to_bottom,#e4e4e7_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#0c0c0d_1px,transparent_1px),linear-gradient(to_bottom,#0c0c0d_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none opacity-40 dark:opacity-40" />
-      
-      {/* Glow blobs */}
-      <div className="absolute top-1/4 left-1/3 -translate-x-1/2 w-[35rem] h-[35rem] bg-blue-500/10 dark:bg-blue-600/10 rounded-full blur-[140px] pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
-      <div className="absolute top-1/3 right-1/4 translate-x-1/2 w-[30rem] h-[30rem] bg-purple-500/10 dark:bg-purple-600/10 rounded-full blur-[140px] pointer-events-none animate-pulse" style={{ animationDuration: '12s' }} />
-
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="max-w-4xl mx-auto space-y-8 relative z-10"
-      >
-        {/* Animated Badge */}
-        <motion.div variants={itemVariants} className="inline-flex justify-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-650 dark:text-zinc-300 backdrop-blur-md shadow-sm dark:shadow-inner dark:shadow-white/5">
-            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin" style={{ animationDuration: '4s' }} />
-            <span>AI-Driven Placement Readiness Platform</span>
-          </div>
-        </motion.div>
-
-        {/* Brand/Product Hero Heading */}
-        <motion.h1 
-          variants={itemVariants} 
-          className="text-5xl sm:text-7xl font-extrabold tracking-tight leading-[1.1] bg-gradient-to-b from-zinc-950 via-zinc-800 to-zinc-650 dark:from-white dark:via-zinc-200 dark:to-zinc-500 bg-clip-text text-transparent"
-        >
+    <section className="bg-white dark:bg-zinc-950 text-zinc-950 dark:text-white px-6 pt-20 pb-20 transition-colors duration-200 border-b border-zinc-150 dark:border-zinc-900">
+      <div className="max-w-4xl mx-auto text-center space-y-6">
+        
+        {/* Simplified Header */}
+        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900 dark:text-white leading-tight">
           Master job interviews. <br />
-          <span className="bg-gradient-to-r from-blue-600 via-indigo-650 to-purple-600 dark:from-blue-400 dark:via-indigo-400 dark:to-purple-500 bg-clip-text text-transparent">
-            Practice, Perform & Get Hired.
-          </span>
-        </motion.h1>
+          <span className="text-indigo-600 dark:text-indigo-400">Practice, Perform & Get Hired.</span>
+        </h1>
 
-        {/* Short details */}
-        <motion.p 
-          variants={itemVariants}
-          className="max-w-2xl mx-auto text-base sm:text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed font-light"
-        >
-          Rehearsa AI evaluates your placement readiness using Gemini AI. Take industry-standard coding rounds, adaptive aptitude mocks, and AI video interviews to identify gaps and secure your dream offer.
-        </motion.p>
+        {/* Short Description */}
+        <p className="max-w-2xl mx-auto text-base text-zinc-650 dark:text-zinc-400 leading-relaxed font-normal">
+          Rehearsa AI evaluates your placement readiness using AI. Take industry-standard coding rounds, adaptive aptitude mocks, and AI video interviews to identify gaps and secure your dream offer.
+        </p>
 
-        {/* Action Buttons */}
-        <motion.div 
-          variants={itemVariants}
-          className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4"
-        >
+        {/* Action Button */}
+        <div className="flex justify-center pt-2">
           {isLoggedIn ? (
             <Link
               href="/dashboard"
-              className="group px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-95 text-white font-semibold text-lg hover:shadow-lg hover:shadow-indigo-500/20 transition-all duration-300 flex items-center gap-2"
+              className="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition duration-200 flex items-center gap-2"
             >
               Go to Workspace Dashboard
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition duration-200" />
+              <ArrowRight className="w-4 h-4" />
             </Link>
           ) : (
-            <>
-              <Link
-                href="/register"
-                className="group px-8 py-4 rounded-2xl bg-zinc-950 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 font-semibold text-lg shadow-xl shadow-black/10 dark:shadow-white/5 transition-all duration-200 flex items-center gap-2 cursor-pointer"
-              >
-                Get Started for Free
-                <ArrowRight className="w-5 h-5 text-white dark:text-zinc-950 group-hover:translate-x-1 transition duration-200" />
-              </Link>
-              <Link
-                href="#assessments"
-                className="px-8 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-300 font-semibold text-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-950 dark:hover:text-white transition duration-200 backdrop-blur-sm shadow-sm flex items-center gap-2 cursor-pointer"
-              >
-                <Play className="w-4 h-4 text-blue-600 dark:text-blue-500 fill-blue-600/10 dark:fill-blue-500/20" />
-                Explore Assessments
-              </Link>
-            </>
+            <Link
+              href="/register"
+              className="px-6 py-3 rounded-lg bg-zinc-950 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 font-semibold text-sm transition duration-200 flex items-center gap-2 border border-zinc-200 dark:border-zinc-800"
+            >
+              Get Started for Free
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           )}
-        </motion.div>
+        </div>
 
-        {/* Stats Row */}
-        <motion.div 
-          variants={itemVariants}
-          className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-16 border-t border-zinc-200 dark:border-zinc-900/60 max-w-3xl mx-auto"
-        >
-          <div className="flex flex-col items-center">
-            <span className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-blue-650 to-indigo-650 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">85%</span>
-            <span className="text-xs text-zinc-550 dark:text-zinc-500 uppercase tracking-wider mt-1 font-semibold">ATS Success Rate</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-indigo-650 to-purple-650 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">10k+</span>
-            <span className="text-xs text-zinc-550 dark:text-zinc-500 uppercase tracking-wider mt-1 font-semibold">Coding Questions Solved</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-purple-650 to-pink-650 dark:from-purple-400 dark:to-pink-400 bg-clip-text text-transparent">24/7</span>
-            <span className="text-xs text-zinc-550 dark:text-zinc-500 uppercase tracking-wider mt-1 font-semibold">AI Interview Coaches</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-pink-650 to-blue-650 dark:from-pink-400 dark:to-blue-400 bg-clip-text text-transparent">100%</span>
-            <span className="text-xs text-zinc-550 dark:text-zinc-500 uppercase tracking-wider mt-1 font-semibold">Unbiased Scoring</span>
-          </div>
-        </motion.div>
-      </motion.div>
+        {/* Embedded Browser Product Preview */}
+        <div id="product-preview" className="pt-12">
+          <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800/80 shadow-md overflow-hidden text-left">
+            
+            {/* Browser window top bar */}
+            <div className="px-5 py-3 bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/70 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+                <span className="w-2.5 h-2.5 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+                <span className="w-2.5 h-2.5 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+                <span className="text-[10px] text-zinc-400 font-semibold ml-3 tracking-wide select-none">app.rehearsa.ai/dashboard</span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[8px] text-zinc-500 font-mono select-none">
+                <span className="w-1 h-1 rounded-full bg-emerald-500" />
+                SSL Secure
+              </div>
+            </div>
 
-      {/* Decorative Gradient Line */}
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-800 to-transparent" />
+            {/* Browser mockup body */}
+            <div className="grid grid-cols-1 md:grid-cols-12 min-h-[380px] bg-zinc-50 dark:bg-zinc-950/20">
+              
+              {/* Sidebar mockup */}
+              <div className="md:col-span-3 bg-white dark:bg-zinc-950 p-4 border-r border-zinc-200 dark:border-zinc-900 flex flex-col justify-between hidden md:flex">
+                <div className="space-y-4">
+                  <div className="text-xs font-bold tracking-tight text-zinc-800 dark:text-zinc-200">Rehearsa AI</div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[11px] font-semibold">
+                      <BarChart2 className="w-3.5 h-3.5" />
+                      Overview
+                    </div>
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-500 dark:text-zinc-400 text-[11px] font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900/50">
+                      <FileText className="w-3.5 h-3.5" />
+                      Resume ATS
+                    </div>
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-500 dark:text-zinc-400 text-[11px] font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900/50">
+                      <Video className="w-3.5 h-3.5" />
+                      Mock Interviews
+                    </div>
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-zinc-500 dark:text-zinc-400 text-[11px] font-medium hover:bg-zinc-100 dark:hover:bg-zinc-900/50">
+                      <Terminal className="w-3.5 h-3.5" />
+                      DSA Coding
+                    </div>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-[9px] text-zinc-450 border border-zinc-150 dark:border-zinc-800 font-mono">
+                  candidate@rehearsa.ai
+                </div>
+              </div>
+
+              {/* Main dashboard mockup page */}
+              <div className="md:col-span-9 p-5 space-y-6 bg-white dark:bg-zinc-900">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Welcome Back, Candidate!</h3>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">Practice core DSA, review resume metrics, and analyze transcripts.</p>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800">
+                    <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Overall Score:</span>
+                    <span className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400">80% Ready</span>
+                  </div>
+                </div>
+
+                {/* Dashboard mockup grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850">
+                    <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mb-2" />
+                    <h4 className="text-xs font-bold">Resume ATS</h4>
+                    <div className="flex justify-between text-[9px] text-zinc-500 mt-2 font-medium">
+                      <span>ATS Match</span>
+                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">85%</span>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850">
+                    <Video className="w-4 h-4 text-indigo-650 dark:text-indigo-400 mb-2" />
+                    <h4 className="text-xs font-bold">Mock Interviews</h4>
+                    <div className="flex justify-between text-[9px] text-zinc-500 mt-2 font-medium">
+                      <span>Completed</span>
+                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">70% Score</span>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850">
+                    <Terminal className="w-4 h-4 text-amber-600 dark:text-amber-400 mb-2" />
+                    <h4 className="text-xs font-bold">DSA Mocks</h4>
+                    <div className="flex justify-between text-[9px] text-zinc-500 mt-2 font-medium">
+                      <span>Logic Check</span>
+                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">75% Score</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI Guidance snippet */}
+                <div className="p-3 rounded-lg bg-zinc-50/50 dark:bg-zinc-950/30 border border-zinc-200 dark:border-zinc-850/80 space-y-1.5">
+                  <span className="text-[9px] font-bold text-indigo-650 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-1 select-none">
+                    <Sparkles className="w-3 h-3" />
+                    AI Coach Guidance
+                  </span>
+                  <ul className="text-[10px] text-zinc-650 dark:text-zinc-300 space-y-1 list-disc pl-3">
+                    <li>Strengthen graph traversal optimization to improve DSA score.</li>
+                    <li>Inject keywords &quot;System Design&quot; and &quot;Kubernetes&quot; into resume header.</li>
+                  </ul>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </section>
   );
 }

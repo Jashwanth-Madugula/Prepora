@@ -21,12 +21,7 @@ import { JWTPayload } from "@/types/auth";
 // Component imports
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
-import Assessments from "@/components/landing/Assessments";
-import HowItWorks from "@/components/landing/HowItWorks";
-import ReadinessScore from "@/components/landing/ReadinessScore";
-import AIRecommendations from "@/components/landing/AIRecommendations";
-import DashboardPreview from "@/components/landing/DashboardPreview";
-import WhyRehearsa from "@/components/landing/WhyRehearsa";
+import Features from "@/components/landing/Features";
 import CTA from "@/components/landing/CTA";
 import Footer from "@/components/landing/Footer";
 
@@ -55,7 +50,7 @@ export default async function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 font-sans antialiased selection:bg-indigo-500/30 selection:text-white scroll-smooth transition-colors duration-200">
-      {/* 1. Glassmorphic Navigation Bar */}
+      {/* 1. Navigation Bar */}
       <Navbar isLoggedIn={isLoggedIn} />
 
       {/* Main Sections Stack */}
@@ -63,29 +58,14 @@ export default async function LandingPage() {
         {/* 2. Hero Section */}
         <Hero isLoggedIn={isLoggedIn} />
 
-        {/* 3. Assessment Categories Catalog */}
-        <Assessments />
+        {/* 3. Core Features Section */}
+        <Features />
 
-        {/* 4. How It Works - Visual Roadmap */}
-        <HowItWorks />
-
-        {/* 5. Placement Readiness Score Simulator */}
-        <ReadinessScore />
-
-        {/* 6. AI Recommendations & Feedback Cards */}
-        <AIRecommendations />
-
-        {/* 7. Product Dashboard Preview */}
-        <DashboardPreview />
-
-        {/* 8. Why Rehearsa - Differentiators */}
-        <WhyRehearsa />
-
-        {/* 9. Final Call to Action */}
+        {/* 4. Final Call to Action */}
         <CTA isLoggedIn={isLoggedIn} />
       </main>
 
-      {/* 10. Footer Section */}
+      {/* 5. Footer Section */}
       <Footer />
     </div>
   );

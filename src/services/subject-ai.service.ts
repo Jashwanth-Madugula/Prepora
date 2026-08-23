@@ -168,59 +168,232 @@ const fallbackSubjectQuestions: Record<string, IGeneratedSubjectQuestion[]> = {
     }
   ]
 };
-
 export async function generateSubjectQuestions(
   subject: "DBMS" | "OS" | "CN" | "OOPS",
   difficulty: "easy" | "medium" | "hard",
   totalQuestions: number = 10
 ): Promise<IGeneratedSubjectQuestion[]> {
-  try {
-    if (!process.env.GROQ_API_KEY) {
-      console.warn("GROQ_API_KEY is not defined. Using local fallback for subject assessment.");
-      return getFallbackQuestions(subject, totalQuestions);
-    }
-
-    const prompt = `
-Generate EXACTLY ${totalQuestions} multiple-choice questions for the computer science subject: "${subject}".
-The target difficulty level is: "${difficulty}".
-
-Each question must be challenging, technically accurate, and contain exactly 4 options.
-Return ONLY valid JSON. Do not include any markdown formatting, markdown blocks, code blocks, or introductory text. Return only the raw JSON.
-
-Format:
-[
-  {
-    "question": "Question text?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correct": "Option A",
-    "explanation": "Detailed explanation of why Option A is correct."
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is missing.");
   }
-]
+
+  const model =
+    process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+
+  const prompt = `
+Generate exactly ${totalQuestions} multiple-choice questions.
+
+Subject: ${subject}
+Difficulty: ${difficulty}
+
+Rules:
+- Generate original computer science questions.
+- Do not repeat questions.
+- Each question must have exactly 4 options.
+- There must be exactly one correct answer.
+- The correct answer must exactly match one of the four options.
+- Every question must contain an explanation.
+- Questions must match the requested difficulty.
+- Do not use placeholder content.
 `;
 
+  try {
+    console.log("====================================");
+    console.log("Generating AI questions");
+    console.log("Subject:", subject);
+    console.log("Difficulty:", difficulty);
+    console.log("Total:", totalQuestions);
+    console.log("Model:", model);
+    console.log("====================================");
+
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model,
+
       messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert computer science examination question generator. Generate high-quality multiple-choice questions.",
+        },
         {
           role: "user",
           content: prompt,
         },
       ],
+
       temperature: 0.7,
+
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "subject_questions",
+          strict: true,
+          schema: {
+            type: "object",
+
+            properties: {
+              questions: {
+                type: "array",
+
+                items: {
+                  type: "object",
+
+                  properties: {
+                    question: {
+                      type: "string",
+                    },
+
+                    options: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                      },
+                    },
+
+                    correct: {
+                      type: "string",
+                    },
+
+                    explanation: {
+                      type: "string",
+                    },
+                  },
+
+                  required: [
+                    "question",
+                    "options",
+                    "correct",
+                    "explanation",
+                  ],
+
+                  additionalProperties: false,
+                },
+              },
+            },
+
+            required: ["questions"],
+
+            additionalProperties: false,
+          },
+        },
+      },
     });
 
-    const responseText = completion.choices[0]?.message?.content;
-    if (responseText) {
-      const cleanResponse = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
-      const parsed = JSON.parse(cleanResponse);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.slice(0, totalQuestions);
+    const responseText =
+      completion.choices[0]?.message?.content;
+
+    if (!responseText) {
+      throw new Error("Groq returned an empty response.");
+    }
+
+    console.log("Groq response received.");
+
+    const parsed = JSON.parse(responseText);
+
+    if (
+      !parsed ||
+      !Array.isArray(parsed.questions)
+    ) {
+      throw new Error(
+        "Groq returned an invalid question structure."
+      );
+    }
+
+    const questions =
+      parsed.questions as IGeneratedSubjectQuestion[];
+
+    // Validate number of questions
+    if (questions.length < totalQuestions) {
+      throw new Error(
+        `Groq generated ${questions.length} questions instead of ${totalQuestions}.`
+      );
+    }
+
+    // Validate every question
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+
+      if (
+        typeof q.question !== "string" ||
+        q.question.trim().length === 0
+      ) {
+        throw new Error(
+          `Question ${i + 1} has invalid question text.`
+        );
+      }
+
+      if (
+        !Array.isArray(q.options) ||
+        q.options.length !== 4
+      ) {
+        throw new Error(
+          `Question ${i + 1} does not have exactly 4 options.`
+        );
+      }
+
+      if (
+        q.options.some(
+          (option) =>
+            typeof option !== "string" ||
+            option.trim().length === 0
+        )
+      ) {
+        throw new Error(
+          `Question ${i + 1} contains an invalid option.`
+        );
+      }
+
+      if (
+        typeof q.correct !== "string" ||
+        !q.options.includes(q.correct)
+      ) {
+        throw new Error(
+          `Question ${i + 1} has an invalid correct answer.`
+        );
+      }
+
+      if (
+        typeof q.explanation !== "string" ||
+        q.explanation.trim().length === 0
+      ) {
+        throw new Error(
+          `Question ${i + 1} has an invalid explanation.`
+        );
       }
     }
-    throw new Error("Invalid response from Groq AI");
-  } catch (error) {
-    console.error("Failed to generate subject questions via Groq, falling back:", error);
-    return getFallbackQuestions(subject, totalQuestions);
+
+    // Remove duplicate questions
+    const uniqueQuestions =
+      questions.filter(
+        (question, index, array) =>
+          array.findIndex(
+            (q) =>
+              q.question.trim().toLowerCase() ===
+              question.question.trim().toLowerCase()
+          ) === index
+      );
+
+    if (uniqueQuestions.length < totalQuestions) {
+      throw new Error(
+        `Groq generated duplicate questions. Unique: ${uniqueQuestions.length}/${totalQuestions}`
+      );
+    }
+
+    console.log(
+      `Successfully generated ${totalQuestions} AI questions.`
+    );
+
+    return uniqueQuestions.slice(0, totalQuestions);
+  } catch (error: any) {
+    console.error("====================================");
+    console.error("GROQ QUESTION GENERATION FAILED");
+    console.error("Message:", error?.message);
+    console.error("Status:", error?.status);
+    console.error("Code:", error?.code);
+    console.error("Full error:", error);
+    console.error("====================================");
+
+    throw error;
   }
 }
 

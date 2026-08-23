@@ -1,16 +1,7 @@
 /**
  * @file src/services/aptitude/aptitude.service.ts
- * @category Business Logic Service
  *
- * Why this code exists:
- * Implements core business operations and logic handlers for "aptitude.service.ts".
- * - Specifically handles aptitude tests logic, database operations, or the dynamic difficulty adaptive testing algorithms.
- *
- * What problem it solves:
- * - Decouples computation-heavy, algorithmic, or external API-dependent operations from HTTP controllers (Next.js route handlers) to ensure clean separation of concerns and high testability.
- *
- * How it works internally:
- * - Exposes async methods and utilities that process input datasets, interface with Mongoose models, and communicate with external services (like Groq, Cloudinary, or Judge0 compilers).
+ * Handles aptitude question creation and persistence.
  */
 
 import AptitudeQuestion from "@/models/aptitude-question.model";
@@ -19,6 +10,16 @@ import {
   generateAptitudeQuestions,
 } from "./aptitude-ai.service";
 
+/**
+ * Create questions for an aptitude test.
+ *
+ * IMPORTANT:
+ * For normal tests:
+ *   totalQuestions = requested number
+ *
+ * For adaptive tests:
+ *   only 1 question is initially created.
+ */
 export async function createQuestions(
   testId: string,
   category: string,
@@ -26,9 +27,68 @@ export async function createQuestions(
   totalQuestions: number,
   company?: string
 ) {
-  // In adaptive mode, we only seed exactly 1 question at "medium" difficulty initially.
-  const questionsToGenerate = difficulty === "adaptive" ? 1 : totalQuestions;
+  /*
+   * Validate requested count.
+   */
+  if (
+    !totalQuestions ||
+    totalQuestions <= 0
+  ) {
+    throw new Error(
+      "Invalid totalQuestions."
+    );
+  }
 
+  /*
+   * Adaptive mode starts with ONE question.
+   *
+   * Normal mode creates ALL requested questions.
+   */
+  const questionsToGenerate =
+    difficulty === "adaptive"
+      ? 1
+      : totalQuestions;
+
+  console.log(
+    "========================================"
+  );
+
+  console.log(
+    "CREATING APTITUDE QUESTIONS"
+  );
+
+  console.log(
+    "Test ID:",
+    testId
+  );
+
+  console.log(
+    "Category:",
+    category
+  );
+
+  console.log(
+    "Difficulty:",
+    difficulty
+  );
+
+  console.log(
+    "Requested:",
+    questionsToGenerate
+  );
+
+  console.log(
+    "Company:",
+    company || "General"
+  );
+
+  console.log(
+    "========================================"
+  );
+
+  /*
+   * Generate questions.
+   */
   const aiQuestions =
     await generateAptitudeQuestions(
       category,
@@ -37,26 +97,116 @@ export async function createQuestions(
       company
     );
 
+  /*
+   * Safety check.
+   *
+   * This prevents the database from receiving
+   * only 3 or 4 questions when the user requested 10.
+   */
+  if (
+    !aiQuestions ||
+    aiQuestions.length !==
+      questionsToGenerate
+  ) {
+    throw new Error(
+      `Question generation failed. Expected ${questionsToGenerate} questions but received ${
+        aiQuestions?.length || 0
+      }.`
+    );
+  }
+
+  /*
+   * Convert AI questions to MongoDB structure.
+   */
   const formattedQuestions =
-    aiQuestions.map((question: any) => ({
-      testId,
+    aiQuestions.map(
+      (question: any) => ({
+        testId,
 
-      category: question.category || category,
+        category:
+          question.category ||
+          category,
 
-      difficulty: question.difficulty || (difficulty === "adaptive" ? "medium" : difficulty),
+        difficulty:
+          question.difficulty ||
+          (
+            difficulty ===
+            "adaptive"
+              ? "medium"
+              : difficulty
+          ),
 
-      question: question.question,
+        question:
+          question.question,
 
-      options: question.options,
+        options:
+          question.options,
 
-      correctAnswer:
-        question.correctAnswer,
+        correctAnswer:
+          question.correctAnswer,
 
-      explanation:
-        question.explanation,
-    }));
+        explanation:
+          question.explanation,
+      })
+    );
 
-  return await AptitudeQuestion.insertMany(
-    formattedQuestions
+  /*
+   * Final validation before database insertion.
+   */
+  for (
+    const question of formattedQuestions
+  ) {
+    if (
+      !question.question ||
+      !Array.isArray(
+        question.options
+      ) ||
+      question.options.length !== 4 ||
+      !question.correctAnswer
+    ) {
+      throw new Error(
+        "Invalid question detected before database insertion."
+      );
+    }
+
+    /*
+     * Correct answer must be one of
+     * the available options.
+     */
+    if (
+      !question.options.includes(
+        question.correctAnswer
+      )
+    ) {
+      throw new Error(
+        `Correct answer does not match options for question: ${question.question}`
+      );
+    }
+  }
+
+  /*
+   * Insert all questions.
+   */
+  const insertedQuestions =
+    await AptitudeQuestion.insertMany(
+      formattedQuestions
+    );
+
+  /*
+   * Final database safety check.
+   */
+  if (
+    insertedQuestions.length !==
+    questionsToGenerate
+  ) {
+    throw new Error(
+      `Database insertion mismatch. Expected ${questionsToGenerate}, inserted ${insertedQuestions.length}.`
+    );
+  }
+
+  console.log(
+    `SUCCESS: ${insertedQuestions.length} aptitude questions created.`
   );
+
+  return insertedQuestions;
 }
